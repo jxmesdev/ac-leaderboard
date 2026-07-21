@@ -14,7 +14,7 @@ Features:
   automatically. Only the fastest lap per driver is kept; a quicker lap overwrites it.
 - **Clickable driver list** — every driver ever entered shows as a button; click to
   pick who's at the wheel. The selected driver and the leader are highlighted.
-- **Create driver** — type a name and click **Add** (or press Enter), or pre-seed
+- **Create driver** — type a name and press **Enter**, or pre-seed
   `docs/data/users.json`.
 - **Auto-publish** — every time a driver beats their best, it's committed and
   `git push`ed on a background thread, so it never stutters the game.
@@ -77,7 +77,7 @@ normally don't set anything. To change behaviour, copy `config.example.json` →
 | Action | How |
 |---|---|
 | Pick your driver | Click your name in the driver grid |
-| Create a driver | Type a name in **New driver** and click **Add** (or press Enter) |
+| Create a driver | Type a name in **New driver** and press **Enter** |
 | Save a PB | Just drive — a new clean best lap is saved and pushed for the selected driver |
 | Toggle auto-capture | **Auto-capture: ON/OFF** button |
 
@@ -87,9 +87,11 @@ and pushed to GitHub automatically (slower laps are ignored, so no push).
 
 > **Text field note:** typing a driver name needs a working text field, which comes
 > from **Custom Shaders Patch (CSP)** — installed by default with most Content Manager
-> setups. On vanilla AC without CSP there's no text input, so the **Add**/type field
-> won't work; add drivers by editing `docs/data/users.json` (a JSON list of names)
-> and the app loads them next session.
+> setups. Submit with **Enter**: that's the only way AC hands the typed text to the
+> app. (Reading a field on demand via `ac.getText` crashes AC natively, so there is
+> intentionally no "Add" button.) On vanilla AC without CSP there's no text input at
+> all — add drivers by editing `docs/data/users.json` (a JSON list of names) and the
+> app loads them next session.
 
 ## How it works
 

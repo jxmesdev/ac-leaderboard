@@ -78,7 +78,6 @@ class LeaderboardApp(object):
         self.l_car = None
         self.driver_btns = []          # MAX_DRIVERS button ids
         self.in_newuser = None
-        self.b_add = None
         self.l_status = None
         self.b_auto = None
         self.row_pos = []
@@ -131,14 +130,14 @@ class LeaderboardApp(object):
             self.driver_btns.append(bid)
         y = grid_y0 + driver_grid_rows * 26 + 6
 
-        # Create driver: type a name, then click Add (or press Enter).
-        self._label("New driver (type, then Add):", MARGIN, y, 12)
+        # Create driver: type a name and press Enter.
+        # NOTE: AC/CSP only hands us the typed text via this Enter/validate
+        # callback. Reading a text field on demand (ac.getText) crashes AC at
+        # the native level, so there is deliberately no "Add" button here.
+        self._label("New driver (type name, press Enter):", MARGIN, y, 12)
         y += 16
-        input_w = WIN_W - 2 * MARGIN - 66
-        self.in_newuser = self._text_input(MARGIN, y, input_w, 22,
+        self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 22,
                                            self.on_create_user)
-        self.b_add = self._button("Add", MARGIN + input_w + 6, y, 60, 22,
-                                  self.on_add_click)
         y += 30
 
         # Controls: auto-capture toggle.
@@ -244,21 +243,6 @@ class LeaderboardApp(object):
                     ac.setPosition(bid, -500, -500)   # hide unused slot
                 except Exception:
                     pass
-
-    def on_add_click(self, *args):
-        """Add button: read the current text field and create that driver."""
-        if self.in_newuser is None:
-            self._set_status("text field unavailable -- add to docs/data/users.json")
-            return
-        try:
-            text = ac.getText(self.in_newuser)
-        except Exception:
-            text = None
-        # ac.getText returns -1 (int) on failure / empty on some builds.
-        if not isinstance(text, str) or not text.strip():
-            self._set_status("type a name in the box first")
-            return
-        self.on_create_user(text)
 
     def on_create_user(self, name):
         name = (name or "").strip()
