@@ -59,8 +59,10 @@ app.acUpdate(0.6)
 print("track label:", mock_ac.STATE.widgets[app._app.l_track]["text"])
 print("car label:  ", mock_ac.STATE.widgets[app._app.l_car]["text"])
 
-# Create two drivers via the text-input validate callback.
-mock_ac.validate(app._app.in_newuser, "James")
+# Create one driver via the Add button (type into field, then click Add)...
+ac.setText(app._app.in_newuser, "James")
+mock_ac.click(app._app.b_add)
+# ...and one via the Enter/validate callback, to prove both paths work.
 mock_ac.validate(app._app.in_newuser, "Alex")
 print("driver buttons:", driver_button_texts())
 

@@ -14,9 +14,10 @@ Features:
   automatically. Only the fastest lap per driver is kept; a quicker lap overwrites it.
 - **Clickable driver list** — every driver ever entered shows as a button; click to
   pick who's at the wheel. The selected driver and the leader are highlighted.
-- **Create driver** — type a name + Enter (or pre-seed `docs/data/users.json`).
-- **Auto-publish** — every saved time is committed and `git push`ed on a background
-  thread, so it never stutters the game.
+- **Create driver** — type a name and click **Add** (or press Enter), or pre-seed
+  `docs/data/users.json`.
+- **Auto-publish** — every time a driver beats their best, it's committed and
+  `git push`ed on a background thread, so it never stutters the game.
 
 ## Install on the gaming PC (no files to move)
 
@@ -76,16 +77,19 @@ normally don't set anything. To change behaviour, copy `config.example.json` →
 | Action | How |
 |---|---|
 | Pick your driver | Click your name in the driver grid |
-| Create a driver | Type a name in **New driver**, press **Enter** |
-| Save a PB | Just drive — a new clean best lap is saved for the selected driver |
+| Create a driver | Type a name in **New driver** and click **Add** (or press Enter) |
+| Save a PB | Just drive — a new clean best lap is saved and pushed for the selected driver |
 | Toggle auto-capture | **Auto-capture: ON/OFF** button |
-| Force a push | **Publish now** button |
 
 The status line shows what happened (`PB for James: 1:21.200`, `git: synced`, …).
+Every time a driver beats their best on the current combo, the new time is committed
+and pushed to GitHub automatically (slower laps are ignored, so no push).
 
-> **Text field note:** AC's native text widget is used for *create driver*. If your
-> AC build lacks it, that field says so — add drivers by editing
-> `docs/data/users.json` (a JSON list of names); the app loads it next session.
+> **Text field note:** typing a driver name needs a working text field, which comes
+> from **Custom Shaders Patch (CSP)** — installed by default with most Content Manager
+> setups. On vanilla AC without CSP there's no text input, so the **Add**/type field
+> won't work; add drivers by editing `docs/data/users.json` (a JSON list of names)
+> and the app loads them next session.
 
 ## How it works
 

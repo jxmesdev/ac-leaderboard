@@ -78,9 +78,9 @@ class LeaderboardApp(object):
         self.l_car = None
         self.driver_btns = []          # MAX_DRIVERS button ids
         self.in_newuser = None
+        self.b_add = None
         self.l_status = None
         self.b_auto = None
-        self.b_publish = None
         self.row_pos = []
         self.row_user = []
         self.row_time = []
@@ -131,18 +131,19 @@ class LeaderboardApp(object):
             self.driver_btns.append(bid)
         y = grid_y0 + driver_grid_rows * 26 + 6
 
-        # Create driver (type + Enter).
-        self._label("New driver (type, Enter):", MARGIN, y, 12)
+        # Create driver: type a name, then click Add (or press Enter).
+        self._label("New driver (type, then Add):", MARGIN, y, 12)
         y += 16
-        self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 20,
+        input_w = WIN_W - 2 * MARGIN - 66
+        self.in_newuser = self._text_input(MARGIN, y, input_w, 22,
                                            self.on_create_user)
+        self.b_add = self._button("Add", MARGIN + input_w + 6, y, 60, 22,
+                                  self.on_add_click)
         y += 30
 
-        # Controls: auto-capture toggle + publish.
+        # Controls: auto-capture toggle.
         self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
                                    self.on_toggle_auto)
-        self.b_publish = self._button("Publish now", WIN_W - MARGIN - 110, y,
-                                      110, 22, self.on_publish)
         y += 28
 
         # Status line.
@@ -195,7 +196,7 @@ class LeaderboardApp(object):
     def _text_input(self, x, y, w, h, cb):
         """Create a text input if the AC build supports it; else None."""
         try:
-            tid = ac.addTextInput(self.window, "input")
+            tid = ac.addTextInput(self.window, "")
             ac.setPosition(tid, x, y)
             ac.setSize(tid, w, h)
             ac.addOnValidateListener(tid, cb)
@@ -244,6 +245,21 @@ class LeaderboardApp(object):
                 except Exception:
                     pass
 
+    def on_add_click(self, *args):
+        """Add button: read the current text field and create that driver."""
+        if self.in_newuser is None:
+            self._set_status("text field unavailable -- add to docs/data/users.json")
+            return
+        try:
+            text = ac.getText(self.in_newuser)
+        except Exception:
+            text = None
+        # ac.getText returns -1 (int) on failure / empty on some builds.
+        if not isinstance(text, str) or not text.strip():
+            self._set_status("type a name in the box first")
+            return
+        self.on_create_user(text)
+
     def on_create_user(self, name):
         name = (name or "").strip()
         if not name:
@@ -289,9 +305,6 @@ class LeaderboardApp(object):
     def on_toggle_auto(self, *args):
         self.auto_capture = not self.auto_capture
         self._set(self.b_auto, self._auto_label())
-
-    def on_publish(self, *args):
-        self._publish("Manual publish", force=True)
 
     def _publish(self, message, force=False):
         if not self.cfg.repo_configured():
