@@ -254,7 +254,13 @@ class LeaderboardApp(object):
             return
         added = self.store.add_user(name)
         self.users = self.store.all_users()
+        # Select using the canonical stored casing (so a duplicate typed as
+        # "james" still highlights the existing "James").
         self.selected = name
+        for u in self.users:
+            if storage.norm(u) == storage.norm(name):
+                self.selected = u
+                break
         self.last_seen_best = 0
         self._render_driver_grid()
         self._refresh_board()
