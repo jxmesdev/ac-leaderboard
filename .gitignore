@@ -11,3 +11,7 @@ __pycache__/
 _smoke_config.json
 _localdata/
 .DS_Store
+
+# Assetto Corsa crash reports (may contain a memory dump + your username)
+*.report
+*.dmp
