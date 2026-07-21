@@ -1,0 +1,12 @@
+{
+  "repo_path": "",
+  "data_subdir": "docs/data",
+  "git_remote": "origin",
+  "git_branch": "main",
+  "git_exe": "git",
+  "author_name": "AC Leaderboard",
+  "author_email": "ac-leaderboard@local",
+  "auto_push": true,
+  "auto_capture": true,
+  "leaderboard_rows": 10
+}

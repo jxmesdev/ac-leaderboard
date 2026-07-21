@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assetto Corsa Leaderboards</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #171b22; --panel2: #1e232c; --text: #e6edf3;
+    --muted: #8b949e; --accent: #f5a623; --line: #2a303a; --gold: #f5c542;
+    --silver: #cbd5e1; --bronze: #cd7f32;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f8fa; --panel: #ffffff; --panel2: #f0f3f6; --text: #1f2328;
+      --muted: #656d76; --accent: #d97706; --line: #d0d7de;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 28px 18px 60px; }
+  header h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: .3px; }
+  header p { margin: 0 0 22px; color: var(--muted); }
+  .controls { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+  .field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 240px; }
+  label { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+  select {
+    appearance: none; background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+    font-size: 15px; cursor: pointer;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    overflow: hidden;
+  }
+  .card-head {
+    padding: 14px 18px; border-bottom: 1px solid var(--line);
+    display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  }
+  .card-head .combo { font-weight: 600; }
+  .card-head .count { color: var(--muted); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 11px 18px; text-align: left; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+  tbody tr { border-top: 1px solid var(--line); }
+  tbody tr:hover { background: var(--panel2); }
+  td.rank { width: 46px; font-variant-numeric: tabular-nums; color: var(--muted); }
+  td.time, td.gap { text-align: right; font-variant-numeric: tabular-nums; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  td.gap { color: var(--muted); }
+  td.user { font-weight: 500; }
+  tr.p1 td.rank { color: var(--gold); font-weight: 700; }
+  tr.p2 td.rank { color: var(--silver); font-weight: 700; }
+  tr.p3 td.rank { color: var(--bronze); font-weight: 700; }
+  .badge { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); margin-left: 8px; vertical-align: middle; }
+  .empty { padding: 40px 18px; text-align: center; color: var(--muted); }
+  footer { margin-top: 26px; color: var(--muted); font-size: 12px; text-align: center; }
+  .updated { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🏁 Assetto Corsa Leaderboards</h1>
+    <p>Fastest valid laps per track &amp; car combination.</p>
+  </header>
+
+  <div class="controls">
+    <div class="field">
+      <label for="combo">Track &amp; Car</label>
+      <select id="combo"><option value="">Select combination…</option></select>
+    </div>
+    <div class="field">
+      <label for="user">Highlight driver</label>
+      <select id="user"><option value="">All drivers</option></select>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="combo" id="head">—</span>
+      <span class="count" id="count"></span>
+    </div>
+    <div id="board"><div class="empty">Loading…</div></div>
+  </div>
+
+  <footer>
+    <span class="updated" id="updated"></span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var records = [], users = [], highlight = "";
+
+  function pretty(id) {
+    if (!id) return "";
+    return id.replace(/_/g, " ").replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+  function comboKey(r) { return [r.track, r.config || "", r.car].join("|"); }
+  function comboLabel(r) {
+    var t = pretty(r.track) + (r.config ? " (" + pretty(r.config) + ")" : "");
+    return t + " — " + pretty(r.car);
+  }
+  function fmtGap(ms) {
+    if (!ms) return "";
+    return "+" + Math.floor(ms / 1000) + "." + String(ms % 1000).padStart(3, "0");
+  }
+
+  function bestPerUser(rows) {
+    var by = {};
+    rows.forEach(function (r) {
+      var k = (r.user || "").toLowerCase();
+      if (!by[k] || r.time_ms < by[k].time_ms) by[k] = r;
+    });
+    return Object.keys(by).map(function (k) { return by[k]; })
+      .sort(function (a, b) { return a.time_ms - b.time_ms; });
+  }
+
+  function render() {
+    var combo = document.getElementById("combo").value;
+    var head = document.getElementById("head");
+    var board = document.getElementById("board");
+    var count = document.getElementById("count");
+    if (!combo) {
+      head.textContent = "—"; count.textContent = "";
+      board.innerHTML = '<div class="empty">Choose a track &amp; car combination above.</div>';
+      return;
+    }
+    var rows = bestPerUser(records.filter(function (r) { return comboKey(r) === combo; }));
+    head.textContent = rows.length ? comboLabel(rows[0]) : "—";
+    count.textContent = rows.length + (rows.length === 1 ? " driver" : " drivers");
+    if (!rows.length) {
+      board.innerHTML = '<div class="empty">No times yet.</div>';
+      return;
+    }
+    var leader = rows[0].time_ms;
+    var html = '<table><thead><tr><th>#</th><th>Driver</th><th style="text-align:right">Time</th><th style="text-align:right">Gap</th></tr></thead><tbody>';
+    rows.forEach(function (r, i) {
+      var cls = i < 3 ? "p" + (i + 1) : "";
+      if (highlight && (r.user || "").toLowerCase() === highlight) cls += " hl";
+      var badge = r.source === "manual" ? '<span class="badge">manual</span>' : "";
+      html += '<tr class="' + cls + '">' +
+        '<td class="rank">' + (i + 1) + '</td>' +
+        '<td class="user">' + escapeHtml(r.user) + badge + '</td>' +
+        '<td class="time">' + fmtTime(r.time_ms) + '</td>' +
+        '<td class="gap">' + fmtGap(r.time_ms - leader) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    board.innerHTML = html;
+  }
+
+  function fmtTime(ms) {
+    var m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000), mm = ms % 1000;
+    return m + ":" + String(s).padStart(2, "0") + "." + String(mm).padStart(3, "0");
+  }
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  function fillCombos() {
+    var seen = {}, opts = [];
+    records.forEach(function (r) {
+      var k = comboKey(r);
+      if (!seen[k]) { seen[k] = true; opts.push({ k: k, label: comboLabel(r) }); }
+    });
+    opts.sort(function (a, b) { return a.label.localeCompare(b.label); });
+    var sel = document.getElementById("combo");
+    opts.forEach(function (o) {
+      var el = document.createElement("option");
+      el.value = o.k; el.textContent = o.label; sel.appendChild(el);
+    });
+  }
+  function fillUsers() {
+    var all = {};
+    users.forEach(function (u) { all[u] = true; });
+    records.forEach(function (r) { if (r.user) all[r.user] = true; });
+    var sel = document.getElementById("user");
+    Object.keys(all).sort(function (a, b) { return a.localeCompare(b); }).forEach(function (u) {
+      var el = document.createElement("option");
+      el.value = u.toLowerCase(); el.textContent = u; sel.appendChild(el);
+    });
+  }
+
+  function getJSON(url) {
+    return fetch(url, { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error(url + " " + r.status);
+      return r.json();
+    });
+  }
+
+  document.getElementById("combo").addEventListener("change", render);
+  document.getElementById("user").addEventListener("change", function (e) {
+    highlight = e.target.value; render();
+  });
+
+  Promise.all([
+    getJSON("data/records.json").catch(function () { return []; }),
+    getJSON("data/users.json").catch(function () { return []; })
+  ]).then(function (res) {
+    records = Array.isArray(res[0]) ? res[0] : [];
+    users = Array.isArray(res[1]) ? res[1] : [];
+    fillCombos(); fillUsers(); render();
+    document.getElementById("updated").textContent =
+      records.length ? (records.length + " times recorded") : "No times recorded yet.";
+    var first = document.getElementById("combo");
+    if (first.options.length === 2) { first.selectedIndex = 1; render(); }
+  });
+
+  // Highlight style injected here to keep it near its logic.
+  var st = document.createElement("style");
+  st.textContent = "tr.hl td { background: color-mix(in srgb, var(--accent) 18%, transparent); }";
+  document.head.appendChild(st);
+})();
+</script>
+</body>
+</html>

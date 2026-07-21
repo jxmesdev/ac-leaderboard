@@ -1,0 +1,13 @@
+# Machine-specific app config (copy config.example.json -> config.json and edit)
+config.json
+
+# Local Claude Code settings (machine-specific)
+.claude/settings.local.json
+
+# Python / editor cruft
+__pycache__/
+*.pyc
+*.tmp
+_smoke_config.json
+_localdata/
+.DS_Store
