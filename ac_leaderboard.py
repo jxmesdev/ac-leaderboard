@@ -28,8 +28,8 @@ APP_NAME = "AC Leaderboard"
 
 # Diagnostic build markers. BUILD is written to debug.log so we always know which
 # version produced a given log. DIAG_TELEMETRY=False disables per-frame sampling.
-BUILD = "telemetry-off-v1"
-DIAG_TELEMETRY = False
+BUILD = "validate-closure-telemetry-gated-v2"
+DIAG_TELEMETRY = True
 
 # Layout constants (pixels).
 WIN_W = 380
@@ -174,7 +174,7 @@ class LeaderboardApp(object):
         self._label("New driver (type + Enter):", MARGIN, y, 12)
         y += 16
         self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 22,
-                                           self.on_new_driver_name)
+                                           self._make_validate_cb())
         y += 28
         self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
                                    self.on_toggle_auto)
@@ -237,6 +237,14 @@ class LeaderboardApp(object):
         except Exception:
             log("addTextInput unavailable")
             return None
+
+    def _make_validate_cb(self):
+        # Return a CLOSURE (not a bound method). AC's addOnValidateListener
+        # fires plain functions/closures reliably but not bound methods -- the
+        # same reason the driver-grid buttons use _make_pick_cb closures.
+        def cb(name):
+            self.on_new_driver_name(name)
+        return cb
 
     def on_new_driver_name(self, name):
         # Validate (Enter) callback: only stash the name; the add happens next
@@ -499,12 +507,19 @@ class LeaderboardApp(object):
             self._add_driver(name)
 
     def _sample_telemetry(self, dt):
+        # Only sample while actually moving. This keeps the heavy per-frame
+        # getCarState work off the input path while the car is parked and the
+        # user may be typing a name (which was destabilising AC's keyboard
+        # handling and crashing on Enter). You never type while driving anyway.
+        speed = ac_data.get_speed_kmh()
+        if speed < 3.0:
+            return
         nsp = ac_data.get_nsp()
         if nsp is None:
             return
         x, z = ac_data.get_world_xz()
         self.recorder.tick(dt, nsp, ac_data.get_gas(), ac_data.get_brake(),
-                           ac_data.get_speed_kmh(), ac_data.get_gear(),
+                           speed, ac_data.get_gear(),
                            ac_data.get_steer_rad(), x, z)
 
     def _combo_name(self, track, cfg):
