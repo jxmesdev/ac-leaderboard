@@ -19,7 +19,7 @@ if APP_DIR not in sys.path:
 
 import ac  # provided by Assetto Corsa
 
-from acl_core import ac_data, config, storage, telemetry
+from acl_core import ac_data, config, storage, telemetry, trackmap
 from acl_core.git_sync import GitSync
 from acl_core.leaderboard import leaderboard_for
 from acl_core.timefmt import format_ms
@@ -304,9 +304,14 @@ class LeaderboardApp(object):
         lap = self.recorder.take_last_lap()
         if not lap:
             return []
+        extra = []
         try:
             payload = telemetry.build_payload(lap, track, cfg, car, user, ms,
                                               date, self.recorder.hz)
+            tm = self._grab_trackmap(track, cfg)
+            if tm is not None:
+                payload["trackmap"] = tm[0]
+                extra.append(tm[1])
             relpath = telemetry.write_telemetry(self.cfg.data_dir, payload)
         except Exception:
             log("telemetry write failed:\n" + traceback.format_exc())
@@ -314,7 +319,16 @@ class LeaderboardApp(object):
         stored = self.store.find_record(track, cfg, car, user)
         if stored is not None:
             stored["telemetry"] = relpath
-        return [os.path.join(self.cfg.data_dir, relpath)]
+        return [os.path.join(self.cfg.data_dir, relpath)] + extra
+
+    def _grab_trackmap(self, track, cfg):
+        """Best-effort copy of the AC track's map.png for the web viewer."""
+        try:
+            ac_root = self.cfg.get("ac_root") or trackmap.find_ac_root(APP_DIR)
+            return trackmap.grab(ac_root, track, cfg, self.cfg.data_dir)
+        except Exception:
+            log("trackmap grab failed:\n" + traceback.format_exc())
+            return None
 
     # -- controls ---------------------------------------------------------
     def _auto_label(self):

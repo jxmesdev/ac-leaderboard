@@ -271,42 +271,65 @@
   }
 
   function trackEdges(){ return primary && primary.data ? primary.data.edges : null; }
+  function trackImgMeta(){ return primary && primary.data ? primary.data.trackmap : null; }
 
-  function mapBBox(sl){
-    var minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
-    function acc(X,Z){ for(var i=0;i<X.length;i++){
-      if(X[i]<minX)minX=X[i]; if(X[i]>maxX)maxX=X[i]; if(Z[i]<minZ)minZ=Z[i]; if(Z[i]>maxZ)maxZ=Z[i]; } }
-    var e=trackEdges();
-    if(e){ acc(e.lx,e.lz); acc(e.rx,e.rz); }      // stable bbox = full track
-    else { sl.forEach(function(l){ acc(l.data.x,l.data.z); }); }
-    if(!isFinite(minX)){ minX=0;maxX=1;minZ=0;maxZ=1; }
-    return {minX:minX,maxX:maxX,minZ:minZ,maxZ:maxZ};
+  var trackImg=null, trackImgUrl=null;
+  function ensureTrackImg(url){
+    if(trackImgUrl===url) return;
+    trackImgUrl=url; trackImg=new Image();
+    trackImg.onload=scheduleRender;
+    trackImg.onerror=function(){ trackImg=null; };
+    trackImg.src="data/"+url;
   }
 
   function drawMap(sl){
     var cv=document.getElementById("map");
     var g=setupCanvas(cv, Math.max(240, Math.min(440, cv.clientWidth))), ctx=g.ctx, w=g.w, h=g.h;
     ctx.clearRect(0,0,w,h);
-    var e=trackEdges();
-    if(!sl.length && !e){ return; }
-    var bb=mapBBox(sl), pad=18, spanX=(bb.maxX-bb.minX)||1, spanZ=(bb.maxZ-bb.minZ)||1;
-    var base=Math.min((w-2*pad)/spanX,(h-2*pad)/spanZ);
-    var ox=(w-spanX*base)/2, oz=(h-spanZ*base)/2;
-    // world -> screen, with camera zoom/pan applied on top of the fit
-    function MX(x){ return (ox+(x-bb.minX)*base)*cam.scale + cam.x; }
-    function MY(z){ return (h-(oz+(z-bb.minZ)*base))*cam.scale + cam.y; }  // flip vertical
+    var tm=trackImgMeta(), e=trackEdges();
+    if(!sl.length && !e && !tm){ return; }
 
-    // track surface (the tarmac ribbon) drawn first, underneath the lines
-    if(e){
+    // "map space": real map.png pixels when we have a track map, else world metres
+    var toMap = tm
+      ? function(x,z){ return [x*tm.scale+tm.xoff, z*tm.scale+tm.zoff]; }
+      : function(x,z){ return [x,z]; };
+    var flip = tm ? false : true;   // world space drawn y-up (flip); image space is y-down
+
+    // fit bbox in map space, framing the shown laps (fall back to edges)
+    var minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+    function acc(mx,my){ if(mx<minX)minX=mx; if(mx>maxX)maxX=mx; if(my<minY)minY=my; if(my>maxY)maxY=my; }
+    sl.forEach(function(l){ var X=l.data.x,Z=l.data.z; for(var i=0;i<X.length;i++){ var m=toMap(X[i],Z[i]); acc(m[0],m[1]); } });
+    if(!isFinite(minX) && e){ for(var k=0;k<e.lx.length;k++){ acc(e.lx[k],e.lz[k]); acc(e.rx[k],e.rz[k]); } }
+    if(!isFinite(minX)){ minX=0;maxX=1;minY=0;maxY=1; }
+
+    var pad=18, spanX=(maxX-minX)||1, spanY=(maxY-minY)||1;
+    var base=Math.min((w-2*pad)/spanX,(h-2*pad)/spanY);
+    var ox=(w-spanX*base)/2, oy=(h-spanY*base)/2;
+    function S(mx,my){
+      var sx=ox+(mx-minX)*base;
+      var sy=flip ? (h-(oy+(my-minY)*base)) : (oy+(my-minY)*base);
+      return [sx*cam.scale+cam.x, sy*cam.scale+cam.y];
+    }
+    function P(x,z){ var m=toMap(x,z); return S(m[0],m[1]); }
+
+    // background: real track map image, else the synthesised edges ribbon
+    if(tm){
+      ensureTrackImg(tm.url);
+      if(trackImg && trackImg.complete && trackImg.naturalWidth){
+        var iw=tm.w||trackImg.naturalWidth, ih=tm.h||trackImg.naturalHeight;
+        var a=S(0,0), b=S(iw,ih);
+        ctx.globalAlpha=0.9; ctx.drawImage(trackImg, a[0],a[1], b[0]-a[0], b[1]-a[1]); ctx.globalAlpha=1;
+      }
+    } else if(e){
       ctx.beginPath();
-      for(var i=0;i<e.lx.length;i++){ var px=MX(e.lx[i]),py=MY(e.lz[i]); if(i===0)ctx.moveTo(px,py); else ctx.lineTo(px,py); }
-      for(var j=e.rx.length-1;j>=0;j--){ ctx.lineTo(MX(e.rx[j]),MY(e.rz[j])); }
+      for(var i=0;i<e.lx.length;i++){ var p=P(e.lx[i],e.lz[i]); if(i===0)ctx.moveTo(p[0],p[1]); else ctx.lineTo(p[0],p[1]); }
+      for(var j=e.rx.length-1;j>=0;j--){ var q=P(e.rx[j],e.rz[j]); ctx.lineTo(q[0],q[1]); }
       ctx.closePath();
       ctx.fillStyle=css("--muted"); ctx.globalAlpha=0.34; ctx.fill();
       ctx.globalAlpha=0.85; ctx.lineWidth=1.2; ctx.strokeStyle=css("--muted"); ctx.stroke(); ctx.globalAlpha=1;
-      // start/finish marker across the track at the first sample
+      var s0=P(e.lx[0],e.lz[0]), s1=P(e.rx[0],e.rz[0]);
       ctx.strokeStyle=css("--text"); ctx.globalAlpha=0.7; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.moveTo(MX(e.lx[0]),MY(e.lz[0])); ctx.lineTo(MX(e.rx[0]),MY(e.rz[0])); ctx.stroke(); ctx.globalAlpha=1;
+      ctx.beginPath(); ctx.moveTo(s0[0],s0[1]); ctx.lineTo(s1[0],s1[1]); ctx.stroke(); ctx.globalAlpha=1;
     }
 
     // driven racing lines — kept thin so track usage is visible
@@ -314,14 +337,15 @@
       var X=l.data.x,Z=l.data.z,n=X.length;
       ctx.strokeStyle=l.color; ctx.lineWidth=(l===primary?1.6:1.2); ctx.globalAlpha=0.95;
       ctx.beginPath();
-      for(var i=0;i<n;i++){ var px=MX(X[i]),py=MY(Z[i]); if(i===0)ctx.moveTo(px,py); else ctx.lineTo(px,py); }
+      for(var i=0;i<n;i++){ var p=P(X[i],Z[i]); if(i===0)ctx.moveTo(p[0],p[1]); else ctx.lineTo(p[0],p[1]); }
       ctx.stroke(); ctx.globalAlpha=1;
     });
     if(cursor!=null){
       sl.forEach(function(l){
         var sm=sampleAt(l.data,cursor); if(!sm) return;
+        var p=P(sm.x,sm.z);
         ctx.fillStyle=l.color; ctx.strokeStyle="#000"; ctx.lineWidth=1;
-        ctx.beginPath(); ctx.arc(MX(sm.x),MY(sm.z), l===primary?4.5:3.5, 0,7); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(p[0],p[1], l===primary?4.5:3.5, 0,7); ctx.fill(); ctx.stroke();
       });
     }
   }

@@ -77,6 +77,7 @@ normally don't set anything. To change behaviour, copy `config.example.json` →
 | `leaderboard_rows` | `10` | Rows shown in-game. |
 | `record_telemetry` | `true` | Record best-lap telemetry for the lap viewer. |
 | `telemetry_hz` | `30` | Telemetry sample rate. |
+| `ac_root` | `""` → auto | AC install path; used to copy the track's `map.png`. Auto-detected from the app folder. |
 
 ## Using it in-game
 
@@ -104,10 +105,12 @@ and pushed to GitHub automatically (slower laps are ignored, so no push).
 On the leaderboard, any driver with recorded telemetry shows a 📈 next to their name.
 Click it to open the **lap viewer** (`lap.html`):
 
-- A **track map** drawn from the car's world position, with each racing line kept thin
-  so you can see it against the track. **Scroll to zoom, drag to pan, double-click to
-  reset.** When a lap includes track-outline data (`edges`), the tarmac surface is
-  shaded so you can judge whether a driver is using all the track.
+- A **track map** with each racing line kept thin so you can see it against the track.
+  **Scroll to zoom, drag to pan, double-click to reset.** When a best lap is recorded
+  the app copies that track's **`map.png`** from AC and stores its `map.ini` transform
+  (`px = x*SCALE_FACTOR + X_OFFSET`), so the viewer draws the **real circuit outline
+  and width** with the lines laid on top — letting you judge whether a driver is using
+  all the track. (Falls back to a shaded `edges` ribbon, or lines only, if no map.)
 - Stacked **traces vs distance**: throttle, brake, speed, gear, steering.
 - A **Laps** panel listing every driver's lap for that same track + car — tick any of
   them to **overlay** their lap on the map and all traces, each in its own colour.

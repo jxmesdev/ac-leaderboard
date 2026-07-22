@@ -32,6 +32,9 @@ DEFAULTS = {
     "record_telemetry": True,
     # Telemetry sample rate (Hz). 30 is smooth and compact.
     "telemetry_hz": 30,
+    # AC install root (…/assettocorsa). Leave "" to auto-detect from the app
+    # folder; used to copy the track's map.png for the lap viewer.
+    "ac_root": "",
 }
 
 
