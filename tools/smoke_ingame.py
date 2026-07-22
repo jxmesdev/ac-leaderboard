@@ -52,23 +52,23 @@ app.acMain(1.0)
 
 app.acUpdate(0.6)                      # menus, no track yet
 
-# Load a session: Spa + Ferrari.
+# Load a session: Spa + Ferrari. The driver auto-attributes to the AC profile
+# name on session start (no text field -- it crashes AC on this build).
 mock_ac.STATE.track = "spa"
 mock_ac.STATE.car = "ferrari_488_gt3"
-app.acUpdate(0.6)
+mock_ac.STATE.driver_name = "James"
+app.acUpdate(0.6)                         # session start -> auto-pick James
 print("track label:", mock_ac.STATE.widgets[app._app.l_track]["text"])
 print("car label:  ", mock_ac.STATE.widgets[app._app.l_car]["text"])
 
-# Add drivers by typing + Enter: validate() stashes the name, and the next
-# acUpdate applies it (the crash-safe deferred path -- the only in-app method).
-mock_ac.validate(app._app.in_newuser, "James")
-app.acUpdate(1 / 60.0)                    # processes the pending name
-assert app._app.in_newuser is None or mock_ac.STATE.widgets[app._app.in_newuser]["text"] == ""
-mock_ac.validate(app._app.in_newuser, "Alex")
+# Add a second roster name (as users.json / a friend would), then confirm the
+# crash-safe "+ Add me" button (stashes the AC name; acUpdate applies it).
+app._app._add_driver("Alex")
+mock_ac.click(app._app.b_addme)
 app.acUpdate(1 / 60.0)
 print("driver buttons:", driver_button_texts())
 
-# Click James's button (slot 0) to select him.
+# Select James (slot 0) for the lap.
 mock_ac.click(app._app.driver_btns[0])
 print("selected:", app._app.selected)
 

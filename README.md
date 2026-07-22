@@ -14,8 +14,10 @@ Features:
   automatically. Only the fastest lap per driver is kept; a quicker lap overwrites it.
 - **Clickable driver list** — every driver ever entered shows as a button; click to
   pick who's at the wheel. The selected driver and the leader are highlighted.
-- **Add driver** — in-game, type a name and press **Enter** (that's all your friends
-  need). `docs/data/users.json` can also be pre-seeded if you prefer.
+- **Driver = your AC name** — laps auto-attribute to your Assetto Corsa profile name
+  (set it in Content Manager); **+ Add me** adds/selects it, and you click a name in
+  the grid to switch. AC's in-game text field crashes the game, so there's no typing.
+  `docs/data/users.json` can also pre-seed the roster.
 - **Auto-publish** — every time a driver beats their best, it's committed and
   `git push`ed on a background thread, so it never stutters the game.
 - **Lap telemetry** — the best lap's throttle / brake / speed / gear / steering and
@@ -84,7 +86,8 @@ normally don't set anything. To change behaviour, copy `config.example.json` →
 | Action | How |
 |---|---|
 | Pick your driver | Click your name in the driver grid |
-| Add a driver | Type a name in **New driver** and press **Enter** |
+| Add / select yourself | Click **+ Add me** (uses your AC profile name) |
+| Add friends | Each person sets their AC driver name in Content Manager, then drives (auto-added) or clicks **+ Add me** |
 | Pre-seed drivers (optional) | Edit `docs/data/users.json` — e.g. `["James","Alex"]` |
 | Save a PB | Just drive — a new clean best lap is saved and pushed for the selected driver |
 | Toggle auto-capture | **Auto-capture: ON/OFF** button |
@@ -93,13 +96,14 @@ The status line shows what happened (`PB for James: 1:21.200`, `git: synced`, �
 Every time a driver beats their best on the current combo, the new time is committed
 and pushed to GitHub automatically (slower laps are ignored, so no push).
 
-> **Text field note:** AC crashes natively if a python app does heavy or native work
-> *inside* a text input's Enter/validate callback (rebuilding widgets, launching git,
-> etc.) — which is what an earlier version did. The callback now only stashes the
-> typed name and adds the driver on the next `acUpdate` tick, outside the input
-> handler (the same reason the built-in chat app's text field is stable). The field
-> needs **Custom Shaders Patch**. Reading a field on demand (`ac.getText`) also
-> crashes AC, so entry is **Enter-only** (a button can't read what's typed).
+> **Why there's no text field:** AC's in-game text-input widget crashes the game
+> natively on this CSP build — three crash dumps, all in the DirectInput/WndProc
+> keyboard path, even with a do-nothing validate callback. It's a CSP/AC-level bug,
+> not something the app can fix from Python (`ac.getText` crashes too). So driver
+> names come from your **AC profile** — a reliable *native* text field in Content
+> Manager / AC options — auto-attributed to your laps and addable with **+ Add me**.
+> For a fixed friend group, pre-seed `docs/data/users.json` and everyone just clicks
+> their name.
 
 ## Lap viewer (on the Pages site)
 
