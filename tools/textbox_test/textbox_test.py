@@ -1,19 +1,14 @@
-# Assetto Corsa text-input test #5 -- NOT part of the leaderboard app.
+# Assetto Corsa text-input test #6 -- NOT part of the leaderboard app.
 #
-# In the full app: (1) typing a name + Enter did NOT fire the validate callback,
-# and (2) clicking the "+ Add me" button (which calls ac.getDriverName) CRASHED.
-# This test isolates both, in a realistic layout (buttons created BEFORE the
-# field, like the driver grid), with per-frame getCarState like the recorder.
+# Tests #1-5 all worked, but they had ~15 widgets. The real leaderboard builds
+# ~60 (10 driver buttons + 4 headers + 40 row labels + more) and repaints the
+# rows every tick. In the real app the text field stopped responding (Enter did
+# nothing) and a button click crashed. This test reproduces that widget load.
 #
-# Install: copy this folder over the old one in
-#   ...\apps\python\textbox_test\   then enable it and open it IN A SESSION.
-#
-# Do these THREE things, and tell me which (if any) crash + push py_log.txt:
-#   A) Click the field, type "abc", press ENTER.   (does validate fire?)
-#   B) Click the field, type "xyz", then click the [NO-OP] button.  (focus+click)
-#   C) Click the field, type "def", then click the [READ NAME] button. (getDriverName)
-#
-# Each action logs to Documents\Assetto Corsa\logs\py_log.txt.
+# Install: copy this folder over the old one in ...\apps\python\textbox_test\
+# Enable it, open it in a session, click the field, type "abc", press ENTER,
+# then click the [NO-OP] button. Tell me: does Enter register? does it crash?
+# Push py_log.txt (and the crash report if it crashes).
 
 import ac
 import acsys
@@ -21,93 +16,85 @@ import acsys
 _app = None
 _status = None
 _input = None
-_last = ""
+_rows = []
+_frames = 0
 
 
 def _log(msg):
     try:
-        ac.log("[tb5] " + str(msg))
-        ac.console("[tb5] " + str(msg))
+        ac.log("[tb6] " + str(msg))
+        ac.console("[tb6] " + str(msg))
     except Exception:
         pass
 
 
-def _set_status(text):
-    global _last
-    _last = text
+def _on_validate(value):
+    _log("validate fired -> " + repr(value))
     if _status is not None:
         try:
-            ac.setText(_status, text)
+            ac.setText(_status, "validate fired: " + str(value))
         except Exception:
             pass
 
 
-def _on_validate(value):
-    _log("A: validate fired -> " + repr(value))
-    _set_status("validate fired: " + str(value))
-
-
 def _on_noop(x, y):
-    _log("B: no-op button clicked (field may have had focus)")
-    _set_status("no-op clicked")
-
-
-def _on_read(x, y):
-    _log("C: read button clicked -- calling getDriverName")
-    try:
-        name = ac.getDriverName(0)
-        _log("C: getDriverName returned -> " + repr(name))
-        _set_status("driver name: " + str(name))
-    except Exception as exc:
-        _log("C: getDriverName raised: " + str(exc))
+    _log("no-op clicked")
+    if _status is not None:
+        try:
+            ac.setText(_status, "no-op clicked")
+        except Exception:
+            pass
 
 
 def acMain(version):
     global _app, _status, _input
     _log("acMain start")
-    _app = ac.newApp("Textbox Test 5")
-    ac.setSize(_app, 360, 300)
+    _app = ac.newApp("Textbox Test 6")
+    ac.setSize(_app, 380, 640)
 
-    # 10 buttons FIRST, like the driver grid (created before the text field).
+    # 10 buttons (driver grid) with colours + click listeners
     for i in range(10):
         b = ac.addButton(_app, "Driver " + str(i + 1))
-        ac.setPosition(b, 10 + (i % 2) * 175, 30 + (i // 2) * 26)
-        ac.setSize(b, 165, 22)
-        ac.addOnClickedListener(b, (lambda a, c, n=i: _log("grid button " + str(n))))
+        ac.setPosition(b, 10 + (i % 2) * 185, 30 + (i // 2) * 26)
+        ac.setSize(b, 175, 22)
+        ac.addOnClickedListener(b, (lambda a, c, n=i: _log("grid " + str(n))))
         try:
             ac.setFontColor(b, 0.96, 0.65, 0.14, 1.0)
         except Exception:
             pass
 
-    _lab = ac.addLabel(_app, "A: type + Enter | B: NO-OP | C: READ NAME")
-    ac.setPosition(_lab, 10, 168)
-    ac.setFontSize(_lab, 12)
-
     _input = ac.addTextInput(_app, "")
-    ac.setPosition(_input, 10, 190)
-    ac.setSize(_input, 340, 26)
+    ac.setPosition(_input, 10, 175)
+    ac.setSize(_input, 360, 26)
     ac.addOnValidateListener(_input, _on_validate)
 
     bn = ac.addButton(_app, "NO-OP")
-    ac.setPosition(bn, 10, 224)
-    ac.setSize(bn, 165, 24)
+    ac.setPosition(bn, 10, 208)
+    ac.setSize(bn, 175, 24)
     ac.addOnClickedListener(bn, _on_noop)
 
-    br = ac.addButton(_app, "READ NAME")
-    ac.setPosition(br, 185, 224)
-    ac.setSize(br, 165, 24)
-    ac.addOnClickedListener(br, _on_read)
-
-    _status = ac.addLabel(_app, "(status)")
-    ac.setPosition(_status, 10, 258)
+    _status = ac.addLabel(_app, "type abc + Enter, then click NO-OP")
+    ac.setPosition(_status, 10, 240)
     ac.setFontSize(_status, 13)
 
-    _log("built ok (10 grid buttons + field + NO-OP + READ NAME)")
-    return "Textbox Test 5"
+    # ~44 leaderboard-style labels (4 header + 40 rows), like the real board
+    y = 270
+    for r in range(44):
+        lab = ac.addLabel(_app, "row " + str(r))
+        ac.setPosition(lab, 10 + (r % 4) * 90, y + (r // 4) * 22)
+        try:
+            ac.setFontSize(lab, 12)
+        except Exception:
+            pass
+        _rows.append(lab)
+
+    _log("built ok (~58 widgets: 10 buttons + field + 44 labels + status)")
+    return "Textbox Test 6"
 
 
 def acUpdate(deltaT):
-    # per-frame getCarState like the recorder
+    global _frames
+    _frames += 1
     try:
         ac.getCarState(0, acsys.CS.Gas)
         ac.getCarState(0, acsys.CS.SpeedKMH)
@@ -115,6 +102,15 @@ def acUpdate(deltaT):
         ac.getCarState(0, acsys.CS.WorldPosition)
     except Exception:
         pass
+    # repaint the "leaderboard" rows every ~0.5s like _refresh_board (setText +
+    # setFontColor on many labels)
+    if _frames % 30 == 0:
+        for i, lab in enumerate(_rows):
+            try:
+                ac.setText(lab, "r" + str(i) + ":" + str(_frames))
+                ac.setFontColor(lab, 1.0, 1.0, 1.0, 1.0)
+            except Exception:
+                pass
 
 
 def acShutdown():
