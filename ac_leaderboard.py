@@ -28,7 +28,7 @@ APP_NAME = "AC Leaderboard"
 
 # Diagnostic build markers. BUILD is written to debug.log so we always know which
 # version produced a given log. DIAG_TELEMETRY=False disables per-frame sampling.
-BUILD = "validate-closure-telemetry-gated-v2"
+BUILD = "telemetry-moving-gate-v3"
 DIAG_TELEMETRY = True
 
 # Layout constants (pixels).
@@ -102,6 +102,10 @@ class LeaderboardApp(object):
         self.auto_capture = bool(self.cfg.get("auto_capture"))
         self.status_text = ""
         self._accum = 0.0
+        # True only while the car is moving. Checked at the slow cadence so that
+        # while parked/typing there are ZERO per-frame ac.* reads (which crash
+        # AC's keyboard input on Enter).
+        self._moving = False
         self._rows = int(self.cfg.get("leaderboard_rows") or 10)
         # A typed name (Enter); applied on the next acUpdate tick.
         self._pending_driver = None
@@ -220,7 +224,11 @@ class LeaderboardApp(object):
         bid = ac.addButton(self.window, text)
         ac.setPosition(bid, x, y)
         ac.setSize(bid, w, h)
-        ac.addOnClickedListener(bid, cb)
+        # Wrap in a closure: AC's listeners fire closures reliably but not bound
+        # methods (see _make_validate_cb). cb here is usually a bound method.
+        def clicked(px, py):
+            cb(px, py)
+        ac.addOnClickedListener(bid, clicked)
         try:
             ac.setFontSize(bid, 13)
         except Exception:
@@ -466,11 +474,12 @@ class LeaderboardApp(object):
             self._last_git_log = self.git.last_status
             log("git status -> " + self.git.last_status)
 
-        # High-rate telemetry sampling runs every frame while a session is live.
-        # DIAGNOSTIC (BUILD telemetry-off-v1): disabled to test whether per-frame
-        # getCarState/recorder work destabilises AC's keyboard input on Enter.
-        if DIAG_TELEMETRY and self.record_telemetry and self.auto_capture \
-                and self.track and self.car:
+        # High-rate telemetry sampling -- only while MOVING. self._moving is set
+        # at the slow cadence below, so while parked/typing there are ZERO
+        # per-frame ac.* reads on the input path (belt-and-braces robustness;
+        # you never type while driving anyway).
+        if DIAG_TELEMETRY and self._moving and self.record_telemetry \
+                and self.auto_capture and self.track and self.car:
             self._sample_telemetry(dt)
 
         # Everything else (UI, best-lap poll) runs at a relaxed cadence.
@@ -491,6 +500,10 @@ class LeaderboardApp(object):
             self._auto_pick_driver()
             self._refresh_board()
 
+        # Decide (at this slow cadence) whether we're moving, so the per-frame
+        # telemetry sampling above does no ac.* work while parked.
+        self._moving = ac_data.get_speed_kmh() >= 3.0
+
         if self.auto_capture:
             self._poll_best_lap()
 
@@ -507,19 +520,13 @@ class LeaderboardApp(object):
             self._add_driver(name)
 
     def _sample_telemetry(self, dt):
-        # Only sample while actually moving. This keeps the heavy per-frame
-        # getCarState work off the input path while the car is parked and the
-        # user may be typing a name (which was destabilising AC's keyboard
-        # handling and crashing on Enter). You never type while driving anyway.
-        speed = ac_data.get_speed_kmh()
-        if speed < 3.0:
-            return
+        # Gated by self._moving in update(), so this only runs while driving.
         nsp = ac_data.get_nsp()
         if nsp is None:
             return
         x, z = ac_data.get_world_xz()
         self.recorder.tick(dt, nsp, ac_data.get_gas(), ac_data.get_brake(),
-                           speed, ac_data.get_gear(),
+                           ac_data.get_speed_kmh(), ac_data.get_gear(),
                            ac_data.get_steer_rad(), x, z)
 
     def _combo_name(self, track, cfg):
