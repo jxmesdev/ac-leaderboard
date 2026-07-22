@@ -68,18 +68,47 @@ print("driver buttons:", driver_button_texts())
 mock_ac.click(app._app.driver_btns[0])
 print("selected:", app._app.selected)
 
-# Auto-capture: a valid best lap appears, then improves.
-mock_ac.STATE.best_lap = 82500
-app.acUpdate(0.6)
-dump("after auto PB 1:22.500")
-mock_ac.STATE.best_lap = 81200
-app.acUpdate(0.6)
-dump("after auto PB 1:21.200")
 
-# A slower session best is impossible in AC; a non-improving value is ignored.
-mock_ac.STATE.best_lap = 81900
-app.acUpdate(0.6)
-dump("after (ignored) 1:21.900")
+def drive_lap(seconds=5.0, fps=60.0):
+    """Simulate driving one lap: nsp 0->~1 with plausible telemetry."""
+    import math
+    dt = 1.0 / fps
+    frames = int(seconds * fps)
+    for i in range(frames):
+        frac = i / float(frames)
+        mock_ac.STATE.nsp = min(frac, 0.9999)
+        mock_ac.STATE.gas = 1.0 if (i % 90) < 65 else 0.0
+        mock_ac.STATE.brake = 0.0 if mock_ac.STATE.gas > 0 else 0.85
+        mock_ac.STATE.speed_kmh = 190.0 if mock_ac.STATE.gas > 0 else 95.0
+        mock_ac.STATE.gear = 5 if mock_ac.STATE.gas > 0 else 3
+        mock_ac.STATE.steer = 0.25 * math.sin(frac * 10 * math.pi)
+        mock_ac.STATE.world = (120.0 * math.cos(frac * 2 * math.pi),
+                               0.0,
+                               80.0 * math.sin(frac * 2 * math.pi))
+        app.acUpdate(dt)
+
+
+# Drive a full lap for James (accumulates telemetry samples)...
+drive_lap(5.0)
+# ...cross start/finish so the recorder finalizes the lap...
+mock_ac.STATE.nsp = 0.0
+app.acUpdate(1 / 60.0)
+# ...then AC reports it as the new best -> save record + flush telemetry.
+mock_ac.STATE.best_lap = 81200
+for _ in range(40):
+    app.acUpdate(1 / 60.0)
+dump("after driven PB 1:21.200")
+
+tel_path = os.path.join(repo, "docs", "data", "telemetry",
+                        "spa____ferrari_488_gt3__james.json")
+print("telemetry file written:", os.path.isfile(tel_path))
+if os.path.isfile(tel_path):
+    tel = json.load(open(tel_path))
+    print("  samples:", tel["n"], "| channels:",
+          [k for k in ("nsp", "thr", "brk", "spd", "gear", "str", "x", "z") if k in tel],
+          "| len(m):", tel["track_len_m"])
+rec = json.load(open(os.path.join(repo, "docs", "data", "records.json")))[0]
+print("record telemetry link:", rec.get("telemetry"))
 
 # Let the background git worker finish.
 time.sleep(3)

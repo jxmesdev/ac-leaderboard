@@ -18,6 +18,10 @@ Features:
   `docs/data/users.json`.
 - **Auto-publish** — every time a driver beats their best, it's committed and
   `git push`ed on a background thread, so it never stutters the game.
+- **Lap telemetry** — the best lap's throttle / brake / speed / gear / steering and
+  track position are recorded (~30 Hz) and saved alongside the record. The Pages site
+  has a **MoTeC-style lap viewer** (track map + stacked traces) where you can **overlay
+  every other driver's lap** on the same track+car and compare with a synced cursor.
 
 ## Install on the gaming PC (no files to move)
 
@@ -71,6 +75,8 @@ normally don't set anything. To change behaviour, copy `config.example.json` →
 | `auto_push` | `true` | Commit + push each saved time. |
 | `git_branch` | `main` | Branch to push. |
 | `leaderboard_rows` | `10` | Rows shown in-game. |
+| `record_telemetry` | `true` | Record best-lap telemetry for the lap viewer. |
+| `telemetry_hz` | `30` | Telemetry sample rate. |
 
 ## Using it in-game
 
@@ -93,15 +99,31 @@ and pushed to GitHub automatically (slower laps are ignored, so no push).
 > all — add drivers by editing `docs/data/users.json` (a JSON list of names) and the
 > app loads them next session.
 
+## Lap viewer (on the Pages site)
+
+On the leaderboard, any driver with recorded telemetry shows a 📈 next to their name.
+Click it to open the **lap viewer** (`lap.html`):
+
+- A **track map** drawn from the car's world position, with the racing line highlighted.
+- Stacked **traces vs distance**: throttle, brake, speed, gear, steering.
+- A **Laps** panel listing every driver's lap for that same track + car — tick any of
+  them to **overlay** their lap on the map and all traces, each in its own colour.
+- Hover the traces or map for a **synced cursor**: a readout shows every lap's values
+  at that point, plus **Δ** (the time gained/lost versus the primary lap there).
+
+Telemetry is recorded for the **best** lap only and overwritten when it's beaten, so
+the map/traces always reflect each driver's fastest lap.
+
 ## How it works
 
 ```
-Assetto Corsa ──► ac_leaderboard.py ──► acl_core (storage/leaderboard)
+Assetto Corsa ──► ac_leaderboard.py ──► acl_core (storage / leaderboard / telemetry)
    telemetry         (UI + glue)              │
                                               ├─► docs/data/records.json + users.json
+                                              ├─► docs/data/telemetry/<combo>__<driver>.json
                                               └─► git_sync ──► git commit + push (background)
                                                                     │
-                                              GitHub ──► Pages (docs/index.html)
+                                              GitHub ──► Pages (index.html + lap.html)
 ```
 
 Auto-capture uses `ac.getCarState(0, acsys.CS.BestLap)`, which AC only sets for laps
@@ -117,11 +139,12 @@ ac_leaderboard/                  ← repo root == the AC app (clone here)
 ├── config.example.json          ← optional; copy to config.json to tweak
 ├── acl_core/                    ← pure-Python, unit-tested logic (no `ac` import)
 │   ├── config.py  storage.py  leaderboard.py
-│   ├── timefmt.py git_sync.py  ac_data.py
+│   ├── timefmt.py git_sync.py  ac_data.py  telemetry.py
 ├── docs/                        ← GitHub Pages site (Pages serves from /docs)
-│   ├── index.html               ← reads data/*.json and renders leaderboards
-│   └── data/{records,users}.json
-├── tests/test_core.py           ← run on any machine (no AC needed)
+│   ├── index.html               ← leaderboards (links to the lap viewer)
+│   ├── lap.html                 ← MoTeC-style lap viewer + overlay
+│   └── data/{records,users}.json, data/telemetry/*.json
+├── tests/{test_core,test_telemetry}.py   ← run on any machine (no AC needed)
 └── tools/                       ← mock `ac` + off-car smoke test
 ```
 
@@ -130,9 +153,10 @@ ac_leaderboard/                  ← repo root == the AC app (clone here)
 The `acl_core` package never imports `ac`/`acsys`, so it runs anywhere.
 
 ```bash
-python3 tests/test_core.py                       # unit tests
-python3 tools/smoke_ingame.py /path/to/a/clone   # full flow vs a fake `ac` + real git push
-cd docs && python3 -m http.server 8777           # preview the Pages site
+python3 tests/test_core.py                       # leaderboard/storage unit tests
+python3 tests/test_telemetry.py                  # telemetry recorder unit tests
+python3 tools/smoke_ingame.py /path/to/a/clone   # full flow (incl. a driven lap) vs a fake `ac`
+cd docs && python3 -m http.server 8777           # preview the Pages site + lap viewer
 ```
 
 ## Data format
@@ -142,13 +166,24 @@ cd docs && python3 -m http.server 8777           # preview the Pages site
 [
   { "track": "spa", "config": "", "car": "ferrari_488_gt3",
     "user": "James", "time_ms": 81200,
-    "date": "2026-07-21T22:14:26Z", "source": "auto" }
+    "date": "2026-07-21T22:14:26Z", "source": "auto",
+    "telemetry": "telemetry/spa____ferrari_488_gt3__james.json" }
 ]
 ```
 `docs/data/users.json` — every driver ever created:
 ```json
 ["James", "Alex"]
 ```
+`docs/data/telemetry/<combo>__<driver>.json` — best-lap telemetry, columnar arrays
+(one value per ~1/30 s sample) so the viewer can index one cursor across all channels:
+```json
+{ "track":"spa","car":"ferrari_488_gt3","driver":"James","time_ms":81200,
+  "hz":30,"track_len_m":7004,"n":4100,
+  "nsp":[…], "t":[…], "thr":[…], "brk":[…], "spd":[…],
+  "gear":[…], "str":[…], "x":[…], "z":[…] }
+```
+`nsp` (0–1 lap fraction) is the alignment axis for overlays; `x`/`z` are world metres
+for the map; `str` is degrees. A ~90 s lap ≈ 80–120 KB (much less over the wire).
 
 ## Notes & limitations
 

@@ -55,6 +55,10 @@
   tr.p2 td.rank { color: var(--silver); font-weight: 700; }
   tr.p3 td.rank { color: var(--bronze); font-weight: 700; }
   .badge { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); margin-left: 8px; vertical-align: middle; }
+  a.telelink { color: inherit; text-decoration: none; }
+  a.telelink:hover { color: var(--accent); }
+  .tele { font-size: 12px; opacity: .55; }
+  a.telelink:hover .tele { opacity: 1; }
   .empty { padding: 40px 18px; text-align: center; color: var(--muted); }
   footer { margin-top: 26px; color: var(--muted); font-size: 12px; text-align: center; }
   .updated { color: var(--muted); font-size: 12px; }
@@ -142,9 +146,13 @@
       var cls = i < 3 ? "p" + (i + 1) : "";
       if (highlight && (r.user || "").toLowerCase() === highlight) cls += " hl";
       var badge = r.source === "manual" ? '<span class="badge">manual</span>' : "";
+      var name = escapeHtml(r.user);
+      var userCell = r.telemetry
+        ? '<a class="telelink" href="' + lapHref(r) + '">' + name + ' <span class="tele">📈</span></a>'
+        : name;
       html += '<tr class="' + cls + '">' +
         '<td class="rank">' + (i + 1) + '</td>' +
-        '<td class="user">' + escapeHtml(r.user) + badge + '</td>' +
+        '<td class="user">' + userCell + badge + '</td>' +
         '<td class="time">' + fmtTime(r.time_ms) + '</td>' +
         '<td class="gap">' + fmtGap(r.time_ms - leader) + '</td></tr>';
     });
@@ -155,6 +163,11 @@
   function fmtTime(ms) {
     var m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000), mm = ms % 1000;
     return m + ":" + String(s).padStart(2, "0") + "." + String(mm).padStart(3, "0");
+  }
+  function lapHref(r) {
+    var e = encodeURIComponent;
+    return "lap.html?t=" + e(r.track) + "&c=" + e(r.config || "") +
+           "&car=" + e(r.car) + "&d=" + e(r.user);
   }
   function escapeHtml(s) {
     return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {

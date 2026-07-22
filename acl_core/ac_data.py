@@ -59,6 +59,60 @@ def _car_state_int(which):
         return 0
 
 
+def _car_state_float(which):
+    if not _HAVE_AC:
+        return 0.0
+    try:
+        val = ac.getCarState(PLAYER, which)
+        if val is None:
+            return 0.0
+        return float(val)
+    except Exception:
+        return 0.0
+
+
+# -- live telemetry channels (for the lap recorder) -----------------------
+def get_nsp():
+    """Normalized spline position, 0..1 around the lap (None if unavailable)."""
+    if not _HAVE_AC:
+        return None
+    try:
+        return float(ac.getCarState(PLAYER, acsys.CS.NormalizedSplinePosition))
+    except Exception:
+        return None
+
+
+def get_gas():
+    return _car_state_float(acsys.CS.Gas) if _HAVE_AC else 0.0
+
+
+def get_brake():
+    return _car_state_float(acsys.CS.Brake) if _HAVE_AC else 0.0
+
+
+def get_speed_kmh():
+    return _car_state_float(acsys.CS.SpeedKMH) if _HAVE_AC else 0.0
+
+
+def get_gear():
+    return _car_state_int(acsys.CS.Gear) if _HAVE_AC else 0
+
+
+def get_steer_rad():
+    return _car_state_float(acsys.CS.Steer) if _HAVE_AC else 0.0
+
+
+def get_world_xz():
+    """Top-down car position (x, z) in world metres; (0, 0) if unavailable."""
+    if not _HAVE_AC:
+        return (0.0, 0.0)
+    try:
+        wp = ac.getCarState(PLAYER, acsys.CS.WorldPosition)
+        return (float(wp[0]), float(wp[2]))
+    except Exception:
+        return (0.0, 0.0)
+
+
 def get_best_lap_ms():
     """Best VALID lap of the current session in ms (0 if none yet).
 

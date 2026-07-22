@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lap Telemetry · AC Leaderboard</title>
+<style>
+  :root {
+    --bg:#0e1116; --panel:#171b22; --panel2:#1e232c; --text:#e6edf3;
+    --muted:#8b949e; --line:#2a303a; --accent:#f5a623;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f6f8fa; --panel:#fff; --panel2:#f0f3f6; --text:#1f2328;
+            --muted:#656d76; --line:#d0d7de; --accent:#d97706; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:1100px; margin:0 auto; padding:18px 16px 60px; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  .top { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  h1 { font-size:20px; margin:0 0 2px; }
+  .sub { color:var(--muted); font-size:13px; }
+  .grid { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; margin-top:16px; }
+  @media (max-width:820px){ .grid { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; }
+  .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.6px;
+    color:var(--muted); margin:0; padding:10px 14px; border-bottom:1px solid var(--line); }
+  .mapwrap { padding:10px; }
+  #map { width:100%; height:auto; display:block; }
+  .laps { padding:6px 6px 10px; }
+  .lap { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; cursor:pointer; }
+  .lap:hover { background:var(--panel2); }
+  .lap input { margin:0; }
+  .swatch { width:12px; height:12px; border-radius:3px; flex:0 0 auto; }
+  .lap .nm { font-weight:500; }
+  .lap .tm { margin-left:auto; font-variant-numeric:tabular-nums;
+    font-family:ui-monospace,Menlo,monospace; color:var(--muted); }
+  .lap .dl { font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; font-size:12px; }
+  .traces { margin-top:16px; }
+  .readout { padding:10px 14px; }
+  .readout table { width:100%; border-collapse:collapse; font-size:12px; }
+  .readout th, .readout td { text-align:right; padding:3px 4px; font-variant-numeric:tabular-nums; }
+  .readout th:first-child, .readout td:first-child { text-align:left; }
+  .readout thead th { color:var(--muted); font-weight:600; }
+  .hint { color:var(--muted); font-size:12px; padding:0 14px 12px; }
+  canvas.trace { width:100%; display:block; touch-action:none; }
+  .empty { padding:40px; text-align:center; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1 id="title">Lap telemetry</h1>
+      <div class="sub" id="subtitle">Loading…</div>
+    </div>
+    <a id="back" href="index.html">← Leaderboard</a>
+  </div>
+
+  <div id="content" style="display:none">
+    <div class="grid">
+      <div class="card">
+        <h2>Track map</h2>
+        <div class="mapwrap"><canvas id="map"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Laps — click to overlay</h2>
+        <div class="laps" id="laps"></div>
+        <h2>At cursor <span id="cursorpos" style="text-transform:none;letter-spacing:0;color:var(--muted)"></span></h2>
+        <div class="readout"><table id="readout"></table></div>
+        <div class="hint">Hover the traces or map to inspect. Δ = time gap to the primary lap at that point.</div>
+      </div>
+    </div>
+    <div class="card traces" id="traces"></div>
+  </div>
+
+  <div id="error" class="empty" style="display:none"></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var PALETTE = ["#f5a623","#58a6ff","#3fb950","#bc8cff","#f85149","#39c5cf","#db61a2","#d29922","#7ee787","#ff9bce"];
+  var CH = [
+    {key:"thr",  label:"Throttle", unit:"%",    lo:0, hi:100},
+    {key:"brk",  label:"Brake",    unit:"%",    lo:0, hi:100},
+    {key:"spd",  label:"Speed",    unit:"km/h", lo:0, hi:"auto"},
+    {key:"gear", label:"Gear",     unit:"",     lo:0, hi:"auto", step:true},
+    {key:"str",  label:"Steering", unit:"°", lo:"sym", hi:"sym"}
+  ];
+
+  var qs = new URLSearchParams(location.search);
+  var want = {
+    track: (qs.get("t")||"").toLowerCase(),
+    config:(qs.get("c")||"").toLowerCase(),
+    car:   (qs.get("car")||"").toLowerCase(),
+    driver:(qs.get("d")||"").toLowerCase()
+  };
+
+  var laps = [];        // {rec, color, shown, data|null, loading}
+  var primary = null;
+  var cursor = null;    // nsp 0..1 or null
+  var raf = 0;
+
+  function pretty(id){ return (id||"").replace(/_/g," ").replace(/\b\w/g,function(c){return c.toUpperCase();}); }
+  function fmtTime(ms){ if(ms==null) return "—"; var m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),mm=ms%1000;
+    return m+":"+String(s).padStart(2,"0")+"."+String(mm).padStart(3,"0"); }
+  function norm(s){ return (s==null?"":String(s)).trim().toLowerCase(); }
+  function comboMatch(r){ return norm(r.track)===want.track && norm(r.config||"")===want.config && norm(r.car)===want.car; }
+  function getJSON(u){ return fetch(u,{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error(u+" "+r.status); return r.json(); }); }
+  function fail(msg){ document.getElementById("subtitle").textContent="";
+    var e=document.getElementById("error"); e.style.display="block"; e.textContent=msg; }
+
+  getJSON("data/records.json").then(function(records){
+    if(!Array.isArray(records)) records=[];
+    var roster = records.filter(comboMatch).filter(function(r){return r.telemetry;});
+    roster.sort(function(a,b){ return (a.time_ms||1e12)-(b.time_ms||1e12); });
+    if(!roster.length){ fail("No telemetry found for this track & car combination."); return; }
+
+    laps = roster.map(function(r,i){ return {rec:r, color:PALETTE[i%PALETTE.length], shown:false, data:null, loading:false}; });
+    primary = laps.filter(function(l){ return norm(l.rec.user)===want.driver; })[0] || laps[0];
+
+    var combo = pretty(primary.rec.track) + (primary.rec.config? " ("+pretty(primary.rec.config)+")":"") + " — " + pretty(primary.rec.car);
+    document.getElementById("title").textContent = combo;
+    document.getElementById("subtitle").textContent = "Primary: " + primary.rec.user + "  ·  " + fmtTime(primary.rec.time_ms);
+    document.title = "Telemetry · " + primary.rec.user + " · " + combo;
+
+    buildTraceCanvases();
+    renderLapList();
+    document.getElementById("content").style.display="block";
+    // show primary by default
+    toggleLap(primary, true);
+  }).catch(function(e){ fail("Could not load leaderboard data. " + e.message); });
+
+  // ---- lap selection --------------------------------------------------
+  function renderLapList(){
+    var box=document.getElementById("laps"); box.innerHTML="";
+    laps.forEach(function(l){
+      var row=document.createElement("label"); row.className="lap";
+      var cb=document.createElement("input"); cb.type="checkbox"; cb.checked=l.shown;
+      cb.addEventListener("change",function(){ toggleLap(l, cb.checked); });
+      var sw=document.createElement("span"); sw.className="swatch"; sw.style.background=l.color;
+      var nm=document.createElement("span"); nm.className="nm"; nm.textContent=l.rec.user;
+      var tm=document.createElement("span"); tm.className="tm"; tm.textContent=fmtTime(l.rec.time_ms);
+      row.appendChild(cb); row.appendChild(sw); row.appendChild(nm); row.appendChild(tm);
+      l._sw = sw; l._cb = cb;
+      box.appendChild(row);
+    });
+  }
+
+  function toggleLap(l, on){
+    l.shown = on;
+    if(on && !l.data && !l.loading){
+      l.loading = true;
+      getJSON("data/"+l.rec.telemetry).then(function(d){ l.data=d; l.loading=false; scheduleRender(); })
+        .catch(function(){ l.loading=false; l.shown=false; });
+    } else {
+      scheduleRender();
+    }
+  }
+
+  // ---- rendering ------------------------------------------------------
+  var traceCanvases=[];
+  function buildTraceCanvases(){
+    var host=document.getElementById("traces"); host.innerHTML="";
+    var h=document.createElement("h2"); h.textContent="Traces (vs distance)"; host.appendChild(h);
+    CH.forEach(function(ch){
+      var wrap=document.createElement("div"); wrap.style.padding="4px 8px";
+      var cv=document.createElement("canvas"); cv.className="trace"; cv.dataset.key=ch.key;
+      wrap.appendChild(cv); host.appendChild(wrap);
+      traceCanvases.push({ch:ch, cv:cv});
+    });
+    attachHover();
+    window.addEventListener("resize", scheduleRender);
+  }
+
+  function shownLaps(){ return laps.filter(function(l){ return l.shown && l.data; }); }
+
+  function scheduleRender(){ if(raf) return; raf=requestAnimationFrame(function(){ raf=0; render(); }); }
+
+  function render(){
+    var sl=shownLaps();
+    laps.forEach(function(l){
+      if(l._sw) l._sw.style.opacity = l.shown? "1":"0.35";
+      if(l._cb) l._cb.checked = l.shown;
+    });
+    drawMap(sl);
+    traceCanvases.forEach(function(t){ drawTrace(t.cv, t.ch, sl); });
+    drawReadout(sl);
+  }
+
+  function setupCanvas(cv, cssH){
+    var dpr=window.devicePixelRatio||1;
+    var cssW=cv.clientWidth || cv.parentNode.clientWidth;
+    cv.style.height=cssH+"px";
+    cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
+    var ctx=cv.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0);
+    return {ctx:ctx, w:cssW, h:cssH};
+  }
+
+  function css(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  function chRange(ch, sl){
+    if(ch.lo==="sym"||ch.hi==="sym"){
+      var m=1; sl.forEach(function(l){ l.data[ch.key].forEach(function(v){ m=Math.max(m,Math.abs(v)); }); });
+      m=Math.ceil(m/10)*10; return [-m,m];
+    }
+    var lo=(ch.lo==="auto")?Infinity:ch.lo, hi=(ch.hi==="auto")?-Infinity:ch.hi;
+    if(ch.lo==="auto"||ch.hi==="auto"){
+      sl.forEach(function(l){ l.data[ch.key].forEach(function(v){ if(v<lo)lo=v; if(v>hi)hi=v; }); });
+      if(!isFinite(lo))lo=0; if(!isFinite(hi))hi=1; if(hi<=lo)hi=lo+1;
+      if(ch.lo!=="auto")lo=ch.lo;
+      hi=hi+(hi-lo)*0.08;
+    }
+    return [lo,hi];
+  }
+
+  var PADL=42, PADR=10, PADT=8, PADB=18;
+  function drawTrace(cv, ch, sl){
+    var g=setupCanvas(cv, ch.step?90:96), ctx=g.ctx, w=g.w, h=g.h;
+    var plotW=w-PADL-PADR, plotH=h-PADT-PADB;
+    ctx.clearRect(0,0,w,h);
+    var linec=css("--line"), muted=css("--muted"), textc=css("--text");
+    // frame + label
+    ctx.strokeStyle=linec; ctx.lineWidth=1;
+    ctx.strokeRect(PADL, PADT, plotW, plotH);
+    ctx.fillStyle=muted; ctx.font="11px -apple-system,sans-serif";
+    ctx.textBaseline="top"; ctx.textAlign="left";
+    ctx.fillText(ch.label+(ch.unit?(" ("+ch.unit+")"):""), PADL+4, PADT+3);
+    if(!sl.length){ return; }
+    var rg=chRange(ch, sl), lo=rg[0], hi=rg[1];
+    // y gridline at 0 for steering
+    ctx.textAlign="right"; ctx.textBaseline="middle";
+    [lo,hi,(ch.lo==="sym"?0:null)].forEach(function(val){
+      if(val===null) return;
+      var y=PADT+plotH-(val-lo)/(hi-lo)*plotH;
+      ctx.strokeStyle=linec; ctx.globalAlpha=(val===0?0.9:0.5); ctx.beginPath();
+      ctx.moveTo(PADL,y); ctx.lineTo(PADL+plotW,y); ctx.stroke(); ctx.globalAlpha=1;
+      ctx.fillStyle=muted; ctx.fillText(ch.step?String(Math.round(val)):String(Math.round(val)), PADL-4, y);
+    });
+    // traces
+    sl.forEach(function(l){
+      var xs=l.data.nsp, ys=l.data[ch.key], n=xs.length;
+      ctx.strokeStyle=l.color; ctx.lineWidth=(l===primary?1.8:1.3); ctx.globalAlpha=0.95;
+      ctx.beginPath();
+      for(var i=0;i<n;i++){
+        var x=PADL+xs[i]*plotW;
+        var y=PADT+plotH-(ys[i]-lo)/(hi-lo)*plotH;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke(); ctx.globalAlpha=1;
+    });
+    // cursor
+    if(cursor!=null){
+      var cx=PADL+cursor*plotW;
+      ctx.strokeStyle=textc; ctx.globalAlpha=0.5; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(cx,PADT); ctx.lineTo(cx,PADT+plotH); ctx.stroke(); ctx.globalAlpha=1;
+      sl.forEach(function(l){
+        var s=sampleAt(l.data, cursor); if(!s) return;
+        var y=PADT+plotH-(s[ch.key]-lo)/(hi-lo)*plotH;
+        ctx.fillStyle=l.color; ctx.beginPath(); ctx.arc(cx,y,2.6,0,7); ctx.fill();
+      });
+    }
+  }
+
+  function drawMap(sl){
+    var cv=document.getElementById("map");
+    // keep it square-ish
+    var g=setupCanvas(cv, Math.max(220, Math.min(360, cv.clientWidth))), ctx=g.ctx, w=g.w, h=g.h;
+    ctx.clearRect(0,0,w,h);
+    if(!sl.length){ return; }
+    var minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
+    sl.forEach(function(l){ var X=l.data.x,Z=l.data.z; for(var i=0;i<X.length;i++){
+      if(X[i]<minX)minX=X[i]; if(X[i]>maxX)maxX=X[i]; if(Z[i]<minZ)minZ=Z[i]; if(Z[i]>maxZ)maxZ=Z[i]; } });
+    var pad=16, spanX=(maxX-minX)||1, spanZ=(maxZ-minZ)||1;
+    var s=Math.min((w-2*pad)/spanX, (h-2*pad)/spanZ);
+    var ox=(w-spanX*s)/2, oz=(h-spanZ*s)/2;
+    function mx(x){ return ox+(x-minX)*s; }
+    function mz(z){ return h-(oz+(z-minZ)*s); }   // flip vertical
+    sl.forEach(function(l){
+      var X=l.data.x,Z=l.data.z,n=X.length;
+      ctx.strokeStyle=l.color; ctx.lineWidth=(l===primary?2.4:1.4); ctx.globalAlpha=(l===primary?1:0.7);
+      ctx.beginPath();
+      for(var i=0;i<n;i++){ var px=mx(X[i]),pz=mz(Z[i]); if(i===0)ctx.moveTo(px,pz); else ctx.lineTo(px,pz); }
+      ctx.stroke(); ctx.globalAlpha=1;
+    });
+    if(cursor!=null){
+      sl.forEach(function(l){
+        var sm=sampleAt(l.data,cursor); if(!sm) return;
+        ctx.fillStyle=l.color; ctx.strokeStyle="#000"; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.arc(mx(sm.x),mz(sm.z), l===primary?5:4, 0,7); ctx.fill(); ctx.stroke();
+      });
+    }
+  }
+
+  function drawReadout(sl){
+    var t=document.getElementById("readout");
+    var cp=document.getElementById("cursorpos");
+    if(cursor==null || !sl.length){ t.innerHTML=""; cp.textContent=""; return; }
+    var len = primary && primary.data ? primary.data.track_len_m : 0;
+    cp.textContent = len? ("· "+Math.round(cursor*len)+" m") : ("· "+Math.round(cursor*100)+"%");
+    var cols = CH.map(function(c){ return c.label.slice(0,4); });
+    var html = "<thead><tr><th>Lap</th>";
+    CH.forEach(function(c){ html+="<th>"+c.label.slice(0,3)+"</th>"; });
+    html += "<th>Δ</th></tr></thead><tbody>";
+    var p = primary && primary.shown && primary.data ? sampleAt(primary.data, cursor) : null;
+    sl.forEach(function(l){
+      var s=sampleAt(l.data, cursor); if(!s) return;
+      html += "<tr><td><span class='swatch' style='display:inline-block;background:"+l.color+"'></span> "+l.rec.user+"</td>";
+      html += "<td>"+Math.round(s.thr)+"</td><td>"+Math.round(s.brk)+"</td><td>"+Math.round(s.spd)+"</td>";
+      html += "<td>"+Math.round(s.gear)+"</td><td>"+s.str.toFixed(0)+"</td>";
+      var dl="";
+      if(p && l!==primary){ var d=(s.t-p.t)/1000; dl=(d>=0?"+":"")+d.toFixed(2); }
+      html += "<td class='dl' style='color:"+(dl&&dl[0]==="+"?"#f85149":(dl?"#3fb950":"var(--muted)"))+"'>"+dl+"</td></tr>";
+    });
+    t.innerHTML = html+"</tbody>";
+  }
+
+  // interpolate all channels of a lap at normalized position p (0..1)
+  function sampleAt(d, p){
+    var ns=d.nsp, n=ns.length; if(!n) return null;
+    var lo=0, hi=n-1;
+    if(p<=ns[0]) return at(d,0);
+    if(p>=ns[n-1]) return at(d,n-1);
+    while(lo<hi-1){ var mid=(lo+hi)>>1; if(ns[mid]<p) lo=mid; else hi=mid; }
+    var f=(p-ns[lo])/((ns[hi]-ns[lo])||1);
+    var o={}; ["thr","brk","spd","gear","str","x","z","t"].forEach(function(k){
+      o[k]=d[k][lo]+(d[k][hi]-d[k][lo])*f; });
+    return o;
+  }
+  function at(d,i){ var o={}; ["thr","brk","spd","gear","str","x","z","t"].forEach(function(k){ o[k]=d[k][i]; }); return o; }
+
+  // ---- hover ----------------------------------------------------------
+  function attachHover(){
+    function handle(e, cv){
+      var rect=cv.getBoundingClientRect();
+      var cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
+      var plotW=cv.clientWidth-PADL-PADR;
+      var p=(cx-PADL)/plotW;
+      cursor=Math.max(0,Math.min(1,p));
+      scheduleRender();
+    }
+    traceCanvases.forEach(function(t){
+      t.cv.addEventListener("mousemove",function(e){ handle(e,t.cv); });
+      t.cv.addEventListener("touchmove",function(e){ handle(e,t.cv); e.preventDefault(); }, {passive:false});
+    });
+    document.getElementById("traces").addEventListener("mouseleave",function(){ cursor=null; scheduleRender(); });
+  }
+})();
+</script>
+</body>
+</html>

@@ -19,7 +19,7 @@ if APP_DIR not in sys.path:
 
 import ac  # provided by Assetto Corsa
 
-from acl_core import ac_data, config, storage
+from acl_core import ac_data, config, storage, telemetry
 from acl_core.git_sync import GitSync
 from acl_core.leaderboard import leaderboard_for
 from acl_core.timefmt import format_ms
@@ -72,6 +72,10 @@ class LeaderboardApp(object):
         self.status_text = ""
         self._accum = 0.0
         self._rows = int(self.cfg.get("leaderboard_rows") or 10)
+
+        # telemetry recording
+        self.record_telemetry = bool(self.cfg.get("record_telemetry"))
+        self.recorder = telemetry.LapRecorder(hz=int(self.cfg.get("telemetry_hz") or 30))
 
         # widget ids
         self.l_track = None
@@ -279,14 +283,38 @@ class LeaderboardApp(object):
             return
         rec = storage.make_record(track, cfg, car, user, ms, "auto")
         result = self.store.upsert_record(rec)
-        if result in ("new", "improved"):
-            self.store.save()
-            self._refresh_board()
-            verb = "PB" if result == "improved" else "time"
-            self._set_status("{0} for {1}: {2}".format(verb, user, format_ms(ms)))
-            self._publish("{0} {1} {2} {3}".format(user, track, car, format_ms(ms)))
-        else:
+        if result not in ("new", "improved"):
             self._set_status("{0}: {1} not faster than current".format(user, format_ms(ms)))
+            return
+        extra = self._save_telemetry(track, cfg, car, user, ms, rec.get("date"))
+        self.store.save()
+        self._refresh_board()
+        verb = "PB" if result == "improved" else "time"
+        self._set_status("{0} for {1}: {2}".format(verb, user, format_ms(ms)))
+        self._publish("{0} {1} {2} {3}".format(user, track, car, format_ms(ms)),
+                      extra_paths=extra)
+
+    def _save_telemetry(self, track, cfg, car, user, ms, date):
+        """Write best-lap telemetry and link it to the stored record.
+
+        Returns a list of extra file paths to include in the git push.
+        """
+        if not self.record_telemetry:
+            return []
+        lap = self.recorder.take_last_lap()
+        if not lap:
+            return []
+        try:
+            payload = telemetry.build_payload(lap, track, cfg, car, user, ms,
+                                              date, self.recorder.hz)
+            relpath = telemetry.write_telemetry(self.cfg.data_dir, payload)
+        except Exception:
+            log("telemetry write failed:\n" + traceback.format_exc())
+            return []
+        stored = self.store.find_record(track, cfg, car, user)
+        if stored is not None:
+            stored["telemetry"] = relpath
+        return [os.path.join(self.cfg.data_dir, relpath)]
 
     # -- controls ---------------------------------------------------------
     def _auto_label(self):
@@ -296,13 +324,16 @@ class LeaderboardApp(object):
         self.auto_capture = not self.auto_capture
         self._set(self.b_auto, self._auto_label())
 
-    def _publish(self, message, force=False):
+    def _publish(self, message, force=False, extra_paths=None):
         if not self.cfg.repo_configured():
             self._set_status("not a git clone -- cannot push")
             return
         if not (self.cfg.get("auto_push") or force):
             return
-        self.git.request_push(self.store.data_paths(), message)
+        paths = self.store.data_paths()
+        if extra_paths:
+            paths = paths + list(extra_paths)
+        self.git.request_push(paths, message)
 
     def _on_git_status(self, status):
         # Called from the git worker thread; only touches a simple string.
@@ -353,6 +384,11 @@ class LeaderboardApp(object):
 
     # -- per-frame update -------------------------------------------------
     def update(self, dt):
+        # High-rate telemetry sampling runs every frame while a session is live.
+        if self.record_telemetry and self.auto_capture and self.track and self.car:
+            self._sample_telemetry(dt)
+
+        # Everything else (UI, best-lap poll) runs at a relaxed cadence.
         self._accum += dt
         if self._accum < 0.5:
             return
@@ -364,6 +400,7 @@ class LeaderboardApp(object):
         if (track, cfg, car) != (self.track, self.track_config, self.car):
             self.track, self.track_config, self.car = track, cfg, car
             self.last_seen_best = 0
+            self.recorder.reset()
             self._set(self.l_track, "Track: " + self._combo_name(track, cfg))
             self._set(self.l_car, "Car: " + (car or "-"))
             self._refresh_board()
@@ -372,6 +409,15 @@ class LeaderboardApp(object):
             self._poll_best_lap()
 
         self._apply_status()
+
+    def _sample_telemetry(self, dt):
+        nsp = ac_data.get_nsp()
+        if nsp is None:
+            return
+        x, z = ac_data.get_world_xz()
+        self.recorder.tick(dt, nsp, ac_data.get_gas(), ac_data.get_brake(),
+                           ac_data.get_speed_kmh(), ac_data.get_gear(),
+                           ac_data.get_steer_rad(), x, z)
 
     def _combo_name(self, track, cfg):
         if not track:

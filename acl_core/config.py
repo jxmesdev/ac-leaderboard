@@ -27,6 +27,11 @@ DEFAULTS = {
     "auto_capture": True,
     # Number of leaderboard rows to render in-game.
     "leaderboard_rows": 10,
+    # Record per-lap telemetry (throttle/brake/speed/gear/steer/position) for
+    # the best lap, for the web lap viewer. Set false to disable.
+    "record_telemetry": True,
+    # Telemetry sample rate (Hz). 30 is smooth and compact.
+    "telemetry_hz": 30,
 }
 
 

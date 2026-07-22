@@ -18,6 +18,14 @@ class _State(object):
         self.best_lap = 0
         self.last_lap = 0
         self.logs = []
+        # live telemetry channels
+        self.gas = 0.0
+        self.brake = 0.0
+        self.gear = 0
+        self.steer = 0.0          # radians
+        self.speed_kmh = 0.0
+        self.nsp = 0.0
+        self.world = (0.0, 0.0, 0.0)
 
 
 STATE = _State()
@@ -111,6 +119,20 @@ def getCarState(car_id, which, *rest):
         return STATE.best_lap
     if which == _CS.LastLap:
         return STATE.last_lap
+    if which == _CS.Gas:
+        return STATE.gas
+    if which == _CS.Brake:
+        return STATE.brake
+    if which == _CS.Gear:
+        return STATE.gear
+    if which == _CS.Steer:
+        return STATE.steer
+    if which == _CS.SpeedKMH:
+        return STATE.speed_kmh
+    if which == _CS.NormalizedSplinePosition:
+        return STATE.nsp
+    if which == _CS.WorldPosition:
+        return STATE.world
     return 0
 
 
@@ -129,6 +151,12 @@ class _CS(object):
     BestLap = "BestLap"
     LapCount = "LapCount"
     NormalizedSplinePosition = "NSP"
+    Gas = "Gas"
+    Brake = "Brake"
+    Gear = "Gear"
+    Steer = "Steer"
+    SpeedKMH = "SpeedKMH"
+    WorldPosition = "WorldPosition"
 
 
 # -- test-driver helpers ---------------------------------------------------
