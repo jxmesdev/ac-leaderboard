@@ -85,7 +85,6 @@ class LeaderboardApp(object):
         self.l_car = None
         self.driver_btns = []          # MAX_DRIVERS button ids
         self.in_newuser = None
-        self.b_addme = None
         self.l_status = None
         self.b_auto = None
         self.row_pos = []
@@ -100,7 +99,7 @@ class LeaderboardApp(object):
     # -- construction -----------------------------------------------------
     def build(self):
         driver_grid_rows = (MAX_DRIVERS + DRIVER_COLS - 1) // DRIVER_COLS
-        win_h = 150 + driver_grid_rows * 26 + 164 + self._rows * ROW_H
+        win_h = 150 + driver_grid_rows * 26 + 140 + self._rows * ROW_H
         self.window = ac.newApp(APP_NAME)
         ac.setSize(self.window, WIN_W, win_h)
         try:
@@ -141,15 +140,14 @@ class LeaderboardApp(object):
         # New driver: type a name + Enter. The validate callback only stashes
         # the name (see on_new_driver_name); the actual add happens next tick in
         # acUpdate, OUTSIDE the input's event handler -- doing heavy/native work
-        # inside that handler crashes AC. "+ Add me" adds your AC profile name.
-        self._label("New driver (type + Enter), or edit users.json:", MARGIN, y, 12)
+        # inside that handler is what crashes AC.
+        self._label("New driver -- type your name, then press Enter:", MARGIN, y, 12)
         y += 16
         self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 22,
                                            self.on_new_driver_name)
         y += 28
-        self.b_addme = self._button("+ Add me", MARGIN, y, 150, 22, self.on_add_me)
-        self.b_auto = self._button(self._auto_label(), WIN_W - MARGIN - 150, y,
-                                   150, 22, self.on_toggle_auto)
+        self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
+                                   self.on_toggle_auto)
         y += 28
 
         # Status line.
@@ -255,14 +253,6 @@ class LeaderboardApp(object):
                     ac.setPosition(bid, -500, -500)   # hide unused slot
                 except Exception:
                     pass
-
-    def on_add_me(self, *args):
-        """Add (and select) the current AC profile's driver name."""
-        name = ac_data.get_driver_name()
-        if not name:
-            self._set_status("no AC driver name -- add drivers via users.json")
-            return
-        self._add_driver(name)
 
     def _add_driver(self, name):
         name = (name or "").strip()

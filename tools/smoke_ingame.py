@@ -59,15 +59,13 @@ app.acUpdate(0.6)
 print("track label:", mock_ac.STATE.widgets[app._app.l_track]["text"])
 print("car label:  ", mock_ac.STATE.widgets[app._app.l_car]["text"])
 
-# Add a driver by typing + Enter: validate() stashes the name, and the next
-# acUpdate applies it (the crash-safe deferred path). Then one via users.json
-# style, and confirm "+ Add me" (AC profile name) works too.
+# Add drivers by typing + Enter: validate() stashes the name, and the next
+# acUpdate applies it (the crash-safe deferred path -- the only in-app method).
 mock_ac.validate(app._app.in_newuser, "James")
 app.acUpdate(1 / 60.0)                    # processes the pending name
 assert app._app.in_newuser is None or mock_ac.STATE.widgets[app._app.in_newuser]["text"] == ""
-app._app._add_driver("Alex")
-mock_ac.STATE.driver_name = "James"
-mock_ac.click(app._app.b_addme)          # + Add me -> getDriverName -> James (dup)
+mock_ac.validate(app._app.in_newuser, "Alex")
+app.acUpdate(1 / 60.0)
 print("driver buttons:", driver_button_texts())
 
 # Click James's button (slot 0) to select him.
