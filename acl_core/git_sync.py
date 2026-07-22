@@ -76,12 +76,21 @@ class GitSync(object):
             ok, detail = self._commit_and_push(paths, message)
             self._set_status("synced" if ok else ("error: " + detail))
 
+    def _dbg(self, msg):
+        if self.logger:
+            try:
+                self.logger("gitsync: " + msg)
+            except Exception:
+                pass
+
     def _commit_and_push(self, paths, message):
         if not self.available():
             return False, "repo not found: " + str(self.repo_path)
 
+        self._dbg("add start")
         add_args = ["add", "--"] + [self._rel(p) for p in paths]
         rc, out, err = self._run(add_args)
+        self._dbg("add rc=" + str(rc))
         if rc != 0:
             return False, ("git add failed: " + (err or out)).strip()
 
@@ -93,11 +102,15 @@ class GitSync(object):
                 "-c", "user.email=" + self.author_email,
                 "commit", "-m", message,
             ]
+            self._dbg("commit start")
             rc, out, err = self._run(commit_args)
+            self._dbg("commit rc=" + str(rc))
             if rc != 0:
                 return False, ("git commit failed: " + (err or out)).strip()
 
+        self._dbg("push start")
         rc, out, err = self._run(["push", self.remote, "HEAD:" + self.branch])
+        self._dbg("push rc=" + str(rc))
         if rc != 0:
             return False, ("git push failed: " + (err or out)).strip()
         return True, "ok"

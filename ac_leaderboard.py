@@ -38,10 +38,34 @@ WHITE = (1.0, 1.0, 1.0, 1.0)
 MUTED = (0.60, 0.65, 0.70, 1.0)
 
 
+# Crash-proof breadcrumb log: written with flush+fsync so nothing is lost when
+# AC crashes (unlike ac.log, which buffers). Safe to call from any thread (pure
+# file I/O, no ac.*). Lives in the app folder as debug.log.
+_DBG_PATH = os.path.join(APP_DIR, "debug.log")
+
+
+def dbg(msg):
+    try:
+        f = open(_DBG_PATH, "a")
+        f.write(str(msg) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+        f.close()
+    except Exception:
+        pass
+
+
+def dbg_reset():
+    try:
+        open(_DBG_PATH, "w").close()
+    except Exception:
+        pass
+
+
 def log(msg):
+    dbg(msg)   # crash-proof file first
     try:
         ac.log("[ac_leaderboard] " + str(msg))
-        ac.console("[ac_leaderboard] " + str(msg))
     except Exception:
         pass
 
@@ -59,10 +83,7 @@ class LeaderboardApp(object):
             author_email=self.cfg.get("author_email"),
             git_exe=self.cfg.get("git_exe"),
             on_status=self._on_git_status,
-            # NO logger here: it runs on the git worker thread, and calling
-            # ac.* off the main thread crashes AC. Git status still reaches the
-            # UI via on_status (a plain string read on the main thread), and the
-            # main thread mirrors it to the log (see update()).
+            logger=dbg,   # file-only logger: safe to call from the git thread
         )
         self._last_git_log = ""
 
@@ -219,7 +240,10 @@ class LeaderboardApp(object):
     def on_add_me(self, *args):
         """+ Add me button: stash the AC driver name; acUpdate applies it next
         tick (keeps the click handler trivial)."""
-        self._pending_driver = ac_data.get_driver_name()
+        dbg("on_add_me: click")
+        n = ac_data.get_driver_name()
+        dbg("on_add_me: getDriverName -> " + repr(n))
+        self._pending_driver = n
 
     def _color(self, lid, rgba):
         try:
@@ -500,9 +524,13 @@ _app = None
 
 def acMain(ac_version):
     global _app
+    dbg_reset()
+    dbg("acMain: start")
     try:
         _app = LeaderboardApp().build()
+        dbg("acMain: build ok")
     except Exception:
+        dbg("acMain error:\n" + traceback.format_exc())
         log("acMain error:\n" + traceback.format_exc())
     return APP_NAME
 
