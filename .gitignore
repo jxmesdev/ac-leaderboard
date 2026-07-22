@@ -3,6 +3,7 @@ config.json
 
 # Local Claude Code settings (machine-specific)
 .claude/settings.local.json
+.claude/launch.json
 
 # Python / editor cruft
 __pycache__/

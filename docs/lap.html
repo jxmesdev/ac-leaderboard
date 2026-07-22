@@ -63,7 +63,10 @@
     <div class="grid">
       <div class="card">
         <h2>Track map</h2>
-        <div class="mapwrap"><canvas id="map"></canvas></div>
+        <div class="mapwrap">
+          <canvas id="map"></canvas>
+          <div class="hint" style="padding:6px 4px 0">scroll = zoom · drag = pan · double-click = reset</div>
+        </div>
       </div>
       <div class="card">
         <h2>Laps — click to overlay</h2>
@@ -103,6 +106,7 @@
   var primary = null;
   var cursor = null;    // nsp 0..1 or null
   var raf = 0;
+  var cam = {scale:1, x:0, y:0};   // map zoom/pan on top of the fit-to-view
 
   function pretty(id){ return (id||"").replace(/_/g," ").replace(/\b\w/g,function(c){return c.toUpperCase();}); }
   function fmtTime(ms){ if(ms==null) return "—"; var m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),mm=ms%1000;
@@ -173,6 +177,7 @@
       traceCanvases.push({ch:ch, cv:cv});
     });
     attachHover();
+    attachMapInteraction();
     window.addEventListener("resize", scheduleRender);
   }
 
@@ -265,34 +270,78 @@
     }
   }
 
+  function trackEdges(){ return primary && primary.data ? primary.data.edges : null; }
+
+  function mapBBox(sl){
+    var minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
+    function acc(X,Z){ for(var i=0;i<X.length;i++){
+      if(X[i]<minX)minX=X[i]; if(X[i]>maxX)maxX=X[i]; if(Z[i]<minZ)minZ=Z[i]; if(Z[i]>maxZ)maxZ=Z[i]; } }
+    var e=trackEdges();
+    if(e){ acc(e.lx,e.lz); acc(e.rx,e.rz); }      // stable bbox = full track
+    else { sl.forEach(function(l){ acc(l.data.x,l.data.z); }); }
+    if(!isFinite(minX)){ minX=0;maxX=1;minZ=0;maxZ=1; }
+    return {minX:minX,maxX:maxX,minZ:minZ,maxZ:maxZ};
+  }
+
   function drawMap(sl){
     var cv=document.getElementById("map");
-    // keep it square-ish
-    var g=setupCanvas(cv, Math.max(220, Math.min(360, cv.clientWidth))), ctx=g.ctx, w=g.w, h=g.h;
+    var g=setupCanvas(cv, Math.max(240, Math.min(440, cv.clientWidth))), ctx=g.ctx, w=g.w, h=g.h;
     ctx.clearRect(0,0,w,h);
-    if(!sl.length){ return; }
-    var minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
-    sl.forEach(function(l){ var X=l.data.x,Z=l.data.z; for(var i=0;i<X.length;i++){
-      if(X[i]<minX)minX=X[i]; if(X[i]>maxX)maxX=X[i]; if(Z[i]<minZ)minZ=Z[i]; if(Z[i]>maxZ)maxZ=Z[i]; } });
-    var pad=16, spanX=(maxX-minX)||1, spanZ=(maxZ-minZ)||1;
-    var s=Math.min((w-2*pad)/spanX, (h-2*pad)/spanZ);
-    var ox=(w-spanX*s)/2, oz=(h-spanZ*s)/2;
-    function mx(x){ return ox+(x-minX)*s; }
-    function mz(z){ return h-(oz+(z-minZ)*s); }   // flip vertical
+    var e=trackEdges();
+    if(!sl.length && !e){ return; }
+    var bb=mapBBox(sl), pad=18, spanX=(bb.maxX-bb.minX)||1, spanZ=(bb.maxZ-bb.minZ)||1;
+    var base=Math.min((w-2*pad)/spanX,(h-2*pad)/spanZ);
+    var ox=(w-spanX*base)/2, oz=(h-spanZ*base)/2;
+    // world -> screen, with camera zoom/pan applied on top of the fit
+    function MX(x){ return (ox+(x-bb.minX)*base)*cam.scale + cam.x; }
+    function MY(z){ return (h-(oz+(z-bb.minZ)*base))*cam.scale + cam.y; }  // flip vertical
+
+    // track surface (the tarmac ribbon) drawn first, underneath the lines
+    if(e){
+      ctx.beginPath();
+      for(var i=0;i<e.lx.length;i++){ var px=MX(e.lx[i]),py=MY(e.lz[i]); if(i===0)ctx.moveTo(px,py); else ctx.lineTo(px,py); }
+      for(var j=e.rx.length-1;j>=0;j--){ ctx.lineTo(MX(e.rx[j]),MY(e.rz[j])); }
+      ctx.closePath();
+      ctx.fillStyle=css("--muted"); ctx.globalAlpha=0.34; ctx.fill();
+      ctx.globalAlpha=0.85; ctx.lineWidth=1.2; ctx.strokeStyle=css("--muted"); ctx.stroke(); ctx.globalAlpha=1;
+      // start/finish marker across the track at the first sample
+      ctx.strokeStyle=css("--text"); ctx.globalAlpha=0.7; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(MX(e.lx[0]),MY(e.lz[0])); ctx.lineTo(MX(e.rx[0]),MY(e.rz[0])); ctx.stroke(); ctx.globalAlpha=1;
+    }
+
+    // driven racing lines — kept thin so track usage is visible
     sl.forEach(function(l){
       var X=l.data.x,Z=l.data.z,n=X.length;
-      ctx.strokeStyle=l.color; ctx.lineWidth=(l===primary?2.4:1.4); ctx.globalAlpha=(l===primary?1:0.7);
+      ctx.strokeStyle=l.color; ctx.lineWidth=(l===primary?1.6:1.2); ctx.globalAlpha=0.95;
       ctx.beginPath();
-      for(var i=0;i<n;i++){ var px=mx(X[i]),pz=mz(Z[i]); if(i===0)ctx.moveTo(px,pz); else ctx.lineTo(px,pz); }
+      for(var i=0;i<n;i++){ var px=MX(X[i]),py=MY(Z[i]); if(i===0)ctx.moveTo(px,py); else ctx.lineTo(px,py); }
       ctx.stroke(); ctx.globalAlpha=1;
     });
     if(cursor!=null){
       sl.forEach(function(l){
         var sm=sampleAt(l.data,cursor); if(!sm) return;
         ctx.fillStyle=l.color; ctx.strokeStyle="#000"; ctx.lineWidth=1;
-        ctx.beginPath(); ctx.arc(mx(sm.x),mz(sm.z), l===primary?5:4, 0,7); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(MX(sm.x),MY(sm.z), l===primary?4.5:3.5, 0,7); ctx.fill(); ctx.stroke();
       });
     }
+  }
+
+  function attachMapInteraction(){
+    var cv=document.getElementById("map"), dragging=false, lx=0, ly=0;
+    cv.addEventListener("wheel", function(e){
+      e.preventDefault();
+      var r=cv.getBoundingClientRect(), mxp=e.clientX-r.left, myp=e.clientY-r.top;
+      var ns=Math.max(1, Math.min(14, cam.scale*Math.exp(-e.deltaY*0.0015)));
+      cam.x = mxp-(mxp-cam.x)*(ns/cam.scale);
+      cam.y = myp-(myp-cam.y)*(ns/cam.scale);
+      cam.scale = ns; scheduleRender();
+    }, {passive:false});
+    cv.addEventListener("mousedown", function(e){ dragging=true; lx=e.clientX; ly=e.clientY; cv.style.cursor="grabbing"; });
+    window.addEventListener("mouseup", function(){ dragging=false; cv.style.cursor="grab"; });
+    window.addEventListener("mousemove", function(e){ if(!dragging) return;
+      cam.x+=(e.clientX-lx); cam.y+=(e.clientY-ly); lx=e.clientX; ly=e.clientY; scheduleRender(); });
+    cv.addEventListener("dblclick", function(){ cam={scale:1,x:0,y:0}; scheduleRender(); });
+    cv.style.cursor="grab";
   }
 
   function drawReadout(sl){
