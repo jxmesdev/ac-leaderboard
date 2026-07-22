@@ -432,8 +432,8 @@ class LeaderboardApp(object):
 
     # -- per-frame update -------------------------------------------------
     def update(self, dt):
-        # A typed name (Enter) or "+ Add me" stashes into _pending_driver;
-        # apply it here, outside the input event handler. INSTRUMENTED.
+        # A typed name (Enter) stashes into _pending_driver; apply it here,
+        # outside the input's event handler.
         if self._pending_driver is not None:
             name = (self._pending_driver or "").strip()
             self._pending_driver = None
