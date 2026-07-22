@@ -1,0 +1,5 @@
+2026-07-22T23:28:41.542053 - Racelab Lib is running
+2026-07-22T23:28:41.542053 - Racelab Lib is transmitting
+[tbtest4] acMain start
+[tbtest4] built ok (input + 10 buttons + coloured labels)
+[tbtest4] validate fired -> 'Test 4'
