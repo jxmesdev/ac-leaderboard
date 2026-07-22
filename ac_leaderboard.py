@@ -72,6 +72,9 @@ class LeaderboardApp(object):
         self.status_text = ""
         self._accum = 0.0
         self._rows = int(self.cfg.get("leaderboard_rows") or 10)
+        # A name typed into the text field. The validate callback only stashes
+        # it here; acUpdate does the real work next tick (see on_new_driver_name).
+        self._pending_driver = None
 
         # telemetry recording
         self.record_telemetry = bool(self.cfg.get("record_telemetry"))
@@ -81,6 +84,7 @@ class LeaderboardApp(object):
         self.l_track = None
         self.l_car = None
         self.driver_btns = []          # MAX_DRIVERS button ids
+        self.in_newuser = None
         self.b_addme = None
         self.l_status = None
         self.b_auto = None
@@ -96,7 +100,7 @@ class LeaderboardApp(object):
     # -- construction -----------------------------------------------------
     def build(self):
         driver_grid_rows = (MAX_DRIVERS + DRIVER_COLS - 1) // DRIVER_COLS
-        win_h = 150 + driver_grid_rows * 26 + 120 + self._rows * ROW_H
+        win_h = 150 + driver_grid_rows * 26 + 164 + self._rows * ROW_H
         self.window = ac.newApp(APP_NAME)
         ac.setSize(self.window, WIN_W, win_h)
         try:
@@ -134,12 +138,15 @@ class LeaderboardApp(object):
             self.driver_btns.append(bid)
         y = grid_y0 + driver_grid_rows * 26 + 6
 
-        # Add a driver. AC/CSP's in-game text field crashes the game natively
-        # when it takes keyboard input, so there is no typing here: "Add me"
-        # records your AC profile name, and the full roster is managed by
-        # editing docs/data/users.json (loaded at session start).
-        self._label("Add drivers via docs/data/users.json, or:", MARGIN, y, 12)
-        y += 18
+        # New driver: type a name + Enter. The validate callback only stashes
+        # the name (see on_new_driver_name); the actual add happens next tick in
+        # acUpdate, OUTSIDE the input's event handler -- doing heavy/native work
+        # inside that handler crashes AC. "+ Add me" adds your AC profile name.
+        self._label("New driver (type + Enter), or edit users.json:", MARGIN, y, 12)
+        y += 16
+        self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 22,
+                                           self.on_new_driver_name)
+        y += 28
         self.b_addme = self._button("+ Add me", MARGIN, y, 150, 22, self.on_add_me)
         self.b_auto = self._button(self._auto_label(), WIN_W - MARGIN - 150, y,
                                    150, 22, self.on_toggle_auto)
@@ -191,6 +198,24 @@ class LeaderboardApp(object):
         except Exception:
             pass
         return bid
+
+    def _text_input(self, x, y, w, h, cb):
+        """Create a CSP text input; returns its id, or None if unsupported."""
+        try:
+            tid = ac.addTextInput(self.window, "")
+            ac.setPosition(tid, x, y)
+            ac.setSize(tid, w, h)
+            ac.addOnValidateListener(tid, cb)
+            return tid
+        except Exception:
+            log("addTextInput unavailable; use + Add me or users.json")
+            return None
+
+    def on_new_driver_name(self, name):
+        """Validate (Enter) callback. Runs INSIDE AC's input event handler, so
+        it must be trivial -- only stash the name. acUpdate does the real work
+        next tick; doing widget/git work here crashes AC natively."""
+        self._pending_driver = name
 
     def _color(self, lid, rgba):
         try:
@@ -378,6 +403,16 @@ class LeaderboardApp(object):
 
     # -- per-frame update -------------------------------------------------
     def update(self, dt):
+        # A driver name typed + Enter'd is processed here (not in the input's
+        # own event handler, which crashes AC if it does heavy/native work).
+        if self._pending_driver is not None:
+            name = self._pending_driver
+            self._pending_driver = None
+            if name and name.strip():
+                self._add_driver(name)
+            if self.in_newuser is not None:
+                self._set(self.in_newuser, "")   # clear field (safe here)
+
         # High-rate telemetry sampling runs every frame while a session is live.
         if self.record_telemetry and self.auto_capture and self.track and self.car:
             self._sample_telemetry(dt)
