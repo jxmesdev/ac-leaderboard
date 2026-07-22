@@ -1,23 +1,20 @@
-# Minimal Assetto Corsa text-input test #3 -- NOT part of the leaderboard app.
+# Minimal Assetto Corsa text-input test #4 -- NOT part of the leaderboard app.
 #
-# Tests #1 (bare field) and #2 (field + per-frame getCarState) both WORKED.
-# This version adds the next difference: a BACKGROUND THREAD that repeatedly
-# launches `git` via subprocess.Popen -- exactly how the leaderboard's git push
-# works. Everything else is the same bare text field.
+# Tests #1-3 all WORKED (bare field; +per-frame getCarState; +git subprocess
+# thread). The one thing none of them had, but the leaderboard does: BUTTONS
+# (with click listeners) and colored labels in the SAME window as the text
+# field -- the driver grid + leaderboard. Your live app has buttons but no
+# field (works); the tests had a field but no buttons (work). This tests the
+# combination.
 #
 # Install: copy this "textbox_test" folder over the old one in
 #   ...\steamapps\common\assettocorsa\apps\python\textbox_test\
 # Enable it, open it in a session, click the field, type a word, press Enter.
-#   - If AC CRASHES  -> launching git via subprocess on a thread is the culprit;
-#                       fix = change how/when the push runs.
-#   - If it WORKS    -> I'll test the last suspect (many widgets + setFontColor).
+#   - If AC CRASHES  -> a text field + buttons/colored labels together is the
+#                       trigger; I'll split buttons vs setFontColor next, then fix.
+#   - If it WORKS    -> I'll replicate the full app build to find the combo.
 #
-# The worker runs `git --version` back-to-back so a subprocess is almost always
-# in flight when you press Enter. Steps are logged to py_log.txt.
-
-import os
-import subprocess
-import threading
+# Steps + the validate event are logged to py_log.txt.
 
 import ac
 
@@ -25,17 +22,14 @@ _app = None
 _label = None
 _input = None
 _typed = ""
-_runs = 0
-_stop = False
-
-_IS_WINDOWS = (os.name == "nt")
-_CREATE_NO_WINDOW = 0x08000000
+_btns = []
+_rows = []
 
 
 def _log(msg):
     try:
-        ac.log("[tbtest3] " + str(msg))
-        ac.console("[tbtest3] " + str(msg))
+        ac.log("[tbtest4] " + str(msg))
+        ac.console("[tbtest4] " + str(msg))
     except Exception:
         pass
 
@@ -46,53 +40,62 @@ def _on_validate(value):
     _log("validate fired -> " + repr(value))
 
 
-def _worker():
-    global _runs
-    kwargs = {"stdout": subprocess.PIPE, "stderr": subprocess.PIPE,
-              "stdin": subprocess.PIPE, "universal_newlines": True}
-    if _IS_WINDOWS:
-        kwargs["creationflags"] = _CREATE_NO_WINDOW
-    while not _stop:
-        try:
-            p = subprocess.Popen(["git", "--version"], **kwargs)
-            p.communicate()
-            _runs += 1
-        except Exception as exc:
-            _log("subprocess error: " + str(exc))
-        # tiny pause so we're not pegging a core, but still nearly continuous
-        for _ in range(3):
-            if _stop:
-                break
+def _make_cb(i):
+    def cb(x, y):
+        _log("button " + str(i) + " clicked")
+    return cb
 
 
 def acMain(version):
     global _app, _label, _input
     _log("acMain start")
-    _app = ac.newApp("Textbox Test 3")
-    ac.setSize(_app, 340, 130)
-    _label = ac.addLabel(_app, "type a word, press Enter (git thread running)")
-    ac.setPosition(_label, 10, 30)
+    _app = ac.newApp("Textbox Test 4")
+    ac.setSize(_app, 360, 320)
+
+    _label = ac.addLabel(_app, "type a word, press Enter")
+    ac.setPosition(_label, 10, 28)
     ac.setFontSize(_label, 13)
+
     _input = ac.addTextInput(_app, "")
-    ac.setPosition(_input, 10, 60)
-    ac.setSize(_input, 320, 26)
+    ac.setPosition(_input, 10, 50)
+    ac.setSize(_input, 340, 26)
     ac.addOnValidateListener(_input, _on_validate)
-    t = threading.Thread(target=_worker, name="tbtest3-git")
-    t.daemon = True
-    t.start()
-    _log("built ok (input + background git subprocess thread)")
-    return "Textbox Test 3"
+
+    # 10 buttons with click listeners + font colours (like the driver grid).
+    for i in range(10):
+        b = ac.addButton(_app, "Driver " + str(i + 1))
+        ac.setPosition(b, 10 + (i % 2) * 175, 85 + (i // 2) * 26)
+        ac.setSize(b, 165, 22)
+        ac.addOnClickedListener(b, _make_cb(i))
+        try:
+            ac.setFontSize(b, 13)
+            ac.setFontColor(b, 0.96, 0.65, 0.14, 1.0)
+        except Exception:
+            pass
+        _btns.append(b)
+
+    # a few coloured labels (like the leaderboard rows)
+    for r in range(4):
+        lab = ac.addLabel(_app, "row " + str(r))
+        ac.setPosition(lab, 10, 220 + r * 22)
+        try:
+            ac.setFontSize(lab, 13)
+            ac.setFontColor(lab, 1.0, 1.0, 1.0, 1.0)
+        except Exception:
+            pass
+        _rows.append(lab)
+
+    _log("built ok (input + 10 buttons + coloured labels)")
+    return "Textbox Test 4"
 
 
 def acUpdate(deltaT):
-    if _label is not None:
+    if _label is not None and _typed:
         try:
-            base = ("You typed: " + _typed) if _typed else "type a word, press Enter"
-            ac.setText(_label, base + "  (git runs: " + str(_runs) + ")")
+            ac.setText(_label, "You typed: " + _typed)
         except Exception:
             pass
 
 
 def acShutdown():
-    global _stop
-    _stop = True
+    pass
