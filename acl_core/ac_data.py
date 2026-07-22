@@ -47,6 +47,16 @@ def get_car():
         return ""
 
 
+def get_driver_name():
+    """The local player's AC profile/driver name ("" if unavailable)."""
+    if not _HAVE_AC:
+        return ""
+    try:
+        return (ac.getDriverName(PLAYER) or "").strip()
+    except Exception:
+        return ""
+
+
 def _car_state_int(which):
     if not _HAVE_AC:
         return 0

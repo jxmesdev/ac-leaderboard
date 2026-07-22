@@ -81,7 +81,7 @@ class LeaderboardApp(object):
         self.l_track = None
         self.l_car = None
         self.driver_btns = []          # MAX_DRIVERS button ids
-        self.in_newuser = None
+        self.b_addme = None
         self.l_status = None
         self.b_auto = None
         self.row_pos = []
@@ -134,19 +134,15 @@ class LeaderboardApp(object):
             self.driver_btns.append(bid)
         y = grid_y0 + driver_grid_rows * 26 + 6
 
-        # Create driver: type a name and press Enter.
-        # NOTE: AC/CSP only hands us the typed text via this Enter/validate
-        # callback. Reading a text field on demand (ac.getText) crashes AC at
-        # the native level, so there is deliberately no "Add" button here.
-        self._label("New driver (type name, press Enter):", MARGIN, y, 12)
-        y += 16
-        self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 22,
-                                           self.on_create_user)
-        y += 30
-
-        # Controls: auto-capture toggle.
-        self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
-                                   self.on_toggle_auto)
+        # Add a driver. AC/CSP's in-game text field crashes the game natively
+        # when it takes keyboard input, so there is no typing here: "Add me"
+        # records your AC profile name, and the full roster is managed by
+        # editing docs/data/users.json (loaded at session start).
+        self._label("Add drivers via docs/data/users.json, or:", MARGIN, y, 12)
+        y += 18
+        self.b_addme = self._button("+ Add me", MARGIN, y, 150, 22, self.on_add_me)
+        self.b_auto = self._button(self._auto_label(), WIN_W - MARGIN - 150, y,
+                                   150, 22, self.on_toggle_auto)
         y += 28
 
         # Status line.
@@ -196,19 +192,6 @@ class LeaderboardApp(object):
             pass
         return bid
 
-    def _text_input(self, x, y, w, h, cb):
-        """Create a text input if the AC build supports it; else None."""
-        try:
-            tid = ac.addTextInput(self.window, "")
-            ac.setPosition(tid, x, y)
-            ac.setSize(tid, w, h)
-            ac.addOnValidateListener(tid, cb)
-            return tid
-        except Exception:
-            log("addTextInput unavailable; add drivers by editing users.json")
-            self._label("(add drivers by editing docs/data/users.json)", x, y, 11)
-            return None
-
     def _color(self, lid, rgba):
         try:
             ac.setFontColor(lid, rgba[0], rgba[1], rgba[2], rgba[3])
@@ -248,18 +231,24 @@ class LeaderboardApp(object):
                 except Exception:
                     pass
 
-    def on_create_user(self, name):
+    def on_add_me(self, *args):
+        """Add (and select) the current AC profile's driver name."""
+        name = ac_data.get_driver_name()
+        if not name:
+            self._set_status("no AC driver name -- add drivers via users.json")
+            return
+        self._add_driver(name)
+
+    def _add_driver(self, name):
         name = (name or "").strip()
         if not name:
             return
         if len(self.users) >= MAX_DRIVERS and name not in self.users:
             self._set_status("driver limit reached (" + str(MAX_DRIVERS) + ")")
-            self._clear_input(self.in_newuser)
             return
         added = self.store.add_user(name)
         self.users = self.store.all_users()
-        # Select using the canonical stored casing (so a duplicate typed as
-        # "james" still highlights the existing "James").
+        # Select using the canonical stored casing.
         self.selected = name
         for u in self.users:
             if storage.norm(u) == storage.norm(name):
@@ -270,11 +259,10 @@ class LeaderboardApp(object):
         self._refresh_board()
         if added:
             self.store.save()
-            self._set_status("created driver: " + name)
-            self._publish("Add driver " + name)
+            self._set_status("added driver: " + self.selected)
+            self._publish("Add driver " + self.selected)
         else:
-            self._set_status("selected: " + name)
-        self._clear_input(self.in_newuser)
+            self._set_status("driver: " + self.selected)
 
     # -- recording --------------------------------------------------------
     def _record(self, user, ms):
@@ -385,14 +373,6 @@ class LeaderboardApp(object):
     def _set(self, lid, text):
         try:
             ac.setText(lid, text)
-        except Exception:
-            pass
-
-    def _clear_input(self, tid):
-        if tid is None:
-            return
-        try:
-            ac.setText(tid, "")
         except Exception:
             pass
 

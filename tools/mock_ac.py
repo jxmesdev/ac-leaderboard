@@ -15,6 +15,7 @@ class _State(object):
         self.track = ""
         self.track_config = ""
         self.car = ""
+        self.driver_name = "TestDriver"
         self.best_lap = 0
         self.last_lap = 0
         self.logs = []
@@ -112,6 +113,10 @@ def getTrackConfiguration(car_id):
 
 def getCarName(car_id):
     return STATE.car
+
+
+def getDriverName(car_id):
+    return STATE.driver_name
 
 
 def getCarState(car_id, which, *rest):

@@ -59,9 +59,12 @@ app.acUpdate(0.6)
 print("track label:", mock_ac.STATE.widgets[app._app.l_track]["text"])
 print("car label:  ", mock_ac.STATE.widgets[app._app.l_car]["text"])
 
-# Create two drivers by typing a name + Enter (the validate callback).
-mock_ac.validate(app._app.in_newuser, "James")
-mock_ac.validate(app._app.in_newuser, "Alex")
+# Roster is managed via users.json; add two drivers programmatically (as the
+# app would after loading users.json), then add the AC profile via "Add me".
+app._app._add_driver("James")
+app._app._add_driver("Alex")
+mock_ac.STATE.driver_name = "James"
+mock_ac.click(app._app.b_addme)          # "+ Add me" -> getDriverName -> James
 print("driver buttons:", driver_button_texts())
 
 # Click James's button (slot 0) to select him.
