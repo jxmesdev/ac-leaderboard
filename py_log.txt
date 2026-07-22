@@ -1,5 +1,0 @@
-2026-07-22T23:07:44.053273 - Racelab Lib is running
-2026-07-22T23:07:44.053273 - Racelab Lib is transmitting
-[tbtest] acMain start
-[tbtest] built ok (input + validate listener)
-[tbtest] validate fired -> 'Test'
