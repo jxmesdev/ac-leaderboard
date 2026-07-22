@@ -26,6 +26,11 @@ from acl_core.timefmt import format_ms
 
 APP_NAME = "AC Leaderboard"
 
+# Diagnostic build markers. BUILD is written to debug.log so we always know which
+# version produced a given log. DIAG_TELEMETRY=False disables per-frame sampling.
+BUILD = "telemetry-off-v1"
+DIAG_TELEMETRY = False
+
 # Layout constants (pixels).
 WIN_W = 380
 MARGIN = 10
@@ -454,7 +459,10 @@ class LeaderboardApp(object):
             log("git status -> " + self.git.last_status)
 
         # High-rate telemetry sampling runs every frame while a session is live.
-        if self.record_telemetry and self.auto_capture and self.track and self.car:
+        # DIAGNOSTIC (BUILD telemetry-off-v1): disabled to test whether per-frame
+        # getCarState/recorder work destabilises AC's keyboard input on Enter.
+        if DIAG_TELEMETRY and self.record_telemetry and self.auto_capture \
+                and self.track and self.car:
             self._sample_telemetry(dt)
 
         # Everything else (UI, best-lap poll) runs at a relaxed cadence.
@@ -527,7 +535,7 @@ _app = None
 def acMain(ac_version):
     global _app
     dbg_reset()
-    dbg("acMain: start")
+    dbg("acMain: start BUILD=" + BUILD + " DIAG_TELEMETRY=" + str(DIAG_TELEMETRY))
     try:
         _app = LeaderboardApp().build()
         dbg("acMain: build ok")
