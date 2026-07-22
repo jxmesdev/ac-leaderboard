@@ -1,0 +1,15 @@
+2026-07-22T23:23:06.932115 - Racelab Lib is running
+2026-07-22T23:23:06.933115 - Racelab Lib is transmitting
+[tbtest3] acMain start
+[tbtest3] built ok (input + background git subprocess thread)
+[tbtest3] validate fired -> 'James'
+[ac_leaderboard] acShutdown error:
+Traceback (most recent call last):
+  File "apps/python/ac_leaderboard\ac_leaderboard.py", line 482, in acShutdown
+    _app.store.save()
+  File "C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\apps\python\ac_leaderboard\acl_core\storage.py", line 109, in save
+    _atomic_write_json(self.users_path, self.users)
+  File "C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\apps\python\ac_leaderboard\acl_core\storage.py", line 51, in _atomic_write_json
+    os.replace(tmp, path)
+PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa\\apps\\python\\ac_leaderboard\\docs\\data\\users.json'
+
