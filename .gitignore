@@ -14,5 +14,4 @@ _localdata/
 .DS_Store
 
 # Assetto Corsa crash reports (may contain a memory dump + your username)
-*.report
 *.dmp
