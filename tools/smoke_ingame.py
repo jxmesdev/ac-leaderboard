@@ -61,9 +61,10 @@ app.acUpdate(0.6)                         # session start -> auto-pick James
 print("track label:", mock_ac.STATE.widgets[app._app.l_track]["text"])
 print("car label:  ", mock_ac.STATE.widgets[app._app.l_car]["text"])
 
-# Add a second roster name (as users.json / a friend would), then confirm the
-# crash-safe "+ Add me" button (stashes the AC name; acUpdate applies it).
-app._app._add_driver("Alex")
+# Add a driver by typing + Enter (validate -> pending -> acUpdate applies it),
+# then a second via "+ Add me".
+mock_ac.validate(app._app.in_newuser, "Alex")
+app.acUpdate(1 / 60.0)
 mock_ac.click(app._app.b_addme)
 app.acUpdate(1 / 60.0)
 print("driver buttons:", driver_button_texts())

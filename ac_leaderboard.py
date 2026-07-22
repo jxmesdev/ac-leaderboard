@@ -41,6 +41,7 @@ MUTED = (0.60, 0.65, 0.70, 1.0)
 def log(msg):
     try:
         ac.log("[ac_leaderboard] " + str(msg))
+        ac.console("[ac_leaderboard] " + str(msg))
     except Exception:
         pass
 
@@ -58,8 +59,12 @@ class LeaderboardApp(object):
             author_email=self.cfg.get("author_email"),
             git_exe=self.cfg.get("git_exe"),
             on_status=self._on_git_status,
-            logger=log,
+            # NO logger here: it runs on the git worker thread, and calling
+            # ac.* off the main thread crashes AC. Git status still reaches the
+            # UI via on_status (a plain string read on the main thread), and the
+            # main thread mirrors it to the log (see update()).
         )
+        self._last_git_log = ""
 
         # session state
         self.track = ""
@@ -83,6 +88,7 @@ class LeaderboardApp(object):
         self.l_track = None
         self.l_car = None
         self.driver_btns = []          # MAX_DRIVERS button ids
+        self.in_newuser = None
         self.b_addme = None
         self.l_status = None
         self.b_auto = None
@@ -136,13 +142,12 @@ class LeaderboardApp(object):
             self.driver_btns.append(bid)
         y = grid_y0 + driver_grid_rows * 26 + 6
 
-        # No text field: AC/CSP's text input crashes the game natively on this
-        # build (3 crash dumps, all in DirectInput). Your driver name comes from
-        # your AC profile (set it in Content Manager). Laps are auto-attributed
-        # to it, and "+ Add me" adds/selects it explicitly.
-        self._label("Driver = your AC name (set in Content Manager):",
-                    MARGIN, y, 12)
+        # INSTRUMENTED: text field restored + step logging to find the crash.
+        self._label("New driver (type + Enter):", MARGIN, y, 12)
         y += 16
+        self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 22,
+                                           self.on_new_driver_name)
+        y += 28
         self.b_addme = self._button("+ Add me", MARGIN, y, 150, 22, self.on_add_me)
         self.b_auto = self._button(self._auto_label(), WIN_W - MARGIN - 150, y,
                                    150, 22, self.on_toggle_auto)
@@ -195,6 +200,22 @@ class LeaderboardApp(object):
             pass
         return bid
 
+    def _text_input(self, x, y, w, h, cb):
+        try:
+            tid = ac.addTextInput(self.window, "")
+            ac.setPosition(tid, x, y)
+            ac.setSize(tid, w, h)
+            ac.addOnValidateListener(tid, cb)
+            return tid
+        except Exception:
+            log("addTextInput unavailable")
+            return None
+
+    def on_new_driver_name(self, name):
+        # INSTRUMENTED: validate callback only stashes the name.
+        log("validate fired: " + repr(name))
+        self._pending_driver = name
+
     def on_add_me(self, *args):
         """+ Add me button: stash the AC driver name; acUpdate applies it next
         tick (keeps the click handler trivial)."""
@@ -240,12 +261,14 @@ class LeaderboardApp(object):
                     pass
 
     def _add_driver(self, name):
+        log("add_driver: start " + repr(name))
         name = (name or "").strip()
         if not name:
             return
         if len(self.users) >= MAX_DRIVERS and name not in self.users:
             self._set_status("driver limit reached (" + str(MAX_DRIVERS) + ")")
             return
+        log("add_driver: add_user")
         added = self.store.add_user(name)
         self.users = self.store.all_users()
         # Select using the canonical stored casing.
@@ -255,14 +278,19 @@ class LeaderboardApp(object):
                 self.selected = u
                 break
         self.last_seen_best = 0
+        log("add_driver: render_grid")
         self._render_driver_grid()
+        log("add_driver: refresh_board")
         self._refresh_board()
         if added:
+            log("add_driver: store.save")
             self.store.save()
             self._set_status("added driver: " + self.selected)
+            log("add_driver: publish")
             self._publish("Add driver " + self.selected)
         else:
             self._set_status("driver: " + self.selected)
+        log("add_driver: done")
 
     # -- recording --------------------------------------------------------
     def _record(self, user, ms):
@@ -378,14 +406,26 @@ class LeaderboardApp(object):
 
     # -- per-frame update -------------------------------------------------
     def update(self, dt):
-        # "+ Add me" stashes the AC driver name; apply it here (safe context).
+        # A typed name (Enter) or "+ Add me" stashes into _pending_driver;
+        # apply it here, outside the input event handler. INSTRUMENTED.
         if self._pending_driver is not None:
             name = (self._pending_driver or "").strip()
             self._pending_driver = None
+            log("update: pending driver " + repr(name))
             if name:
                 self._add_driver(name)
             else:
                 self._set_status("no AC driver name -- set it in Content Manager")
+            if self.in_newuser is not None:
+                log("update: clearing input")
+                self._set(self.in_newuser, "")
+            log("update: pending handled")
+
+        # Mirror git status to the log from the MAIN thread (the worker thread
+        # must never call ac.*). Cheap string compare each frame.
+        if self.git.last_status != self._last_git_log:
+            self._last_git_log = self.git.last_status
+            log("git status -> " + self.git.last_status)
 
         # High-rate telemetry sampling runs every frame while a session is live.
         if self.record_telemetry and self.auto_capture and self.track and self.car:
@@ -420,6 +460,7 @@ class LeaderboardApp(object):
         if self.selected is not None:
             return
         name = ac_data.get_driver_name()
+        log("auto_pick_driver: " + repr(name))
         if name:
             self._add_driver(name)
 
