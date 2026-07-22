@@ -98,7 +98,7 @@ class LeaderboardApp(object):
         self.status_text = ""
         self._accum = 0.0
         self._rows = int(self.cfg.get("leaderboard_rows") or 10)
-        # Set by the "+ Add me" button; applied on the next acUpdate tick.
+        # A typed name (Enter); applied on the next acUpdate tick.
         self._pending_driver = None
 
         # telemetry recording
@@ -109,8 +109,8 @@ class LeaderboardApp(object):
         self.l_track = None
         self.l_car = None
         self.driver_btns = []          # MAX_DRIVERS button ids
+        self.driver_btn_pos = []       # each button's on-screen (x, y)
         self.in_newuser = None
-        self.b_addme = None
         self.l_status = None
         self.b_auto = None
         self.row_pos = []
@@ -161,17 +161,18 @@ class LeaderboardApp(object):
             except Exception:
                 pass
             self.driver_btns.append(bid)
+            self.driver_btn_pos.append((bx, by))
         y = grid_y0 + driver_grid_rows * 26 + 6
 
-        # INSTRUMENTED: text field restored + step logging to find the crash.
+        # Add a driver: type a name + Enter. (No "+ Add me" button -- it triggered
+        # a native crash on this rig; typing is the single, reliable path.)
         self._label("New driver (type + Enter):", MARGIN, y, 12)
         y += 16
         self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 22,
                                            self.on_new_driver_name)
         y += 28
-        self.b_addme = self._button("+ Add me", MARGIN, y, 150, 22, self.on_add_me)
-        self.b_auto = self._button(self._auto_label(), WIN_W - MARGIN - 150, y,
-                                   150, 22, self.on_toggle_auto)
+        self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
+                                   self.on_toggle_auto)
         y += 28
 
         # Status line.
@@ -233,17 +234,10 @@ class LeaderboardApp(object):
             return None
 
     def on_new_driver_name(self, name):
-        # INSTRUMENTED: validate callback only stashes the name.
-        log("validate fired: " + repr(name))
+        # Validate (Enter) callback: only stash the name; the add happens next
+        # tick in acUpdate, outside the input's event handler.
+        dbg("validate fired: " + repr(name))
         self._pending_driver = name
-
-    def on_add_me(self, *args):
-        """+ Add me button: stash the AC driver name; acUpdate applies it next
-        tick (keeps the click handler trivial)."""
-        dbg("on_add_me: click")
-        n = ac_data.get_driver_name()
-        dbg("on_add_me: getDriverName -> " + repr(n))
-        self._pending_driver = n
 
     def _color(self, lid, rgba):
         try:
@@ -275,6 +269,14 @@ class LeaderboardApp(object):
             if i < len(self.users):
                 name = self.users[i]
                 mark = "> " if name == self.selected else "  "
+                # Restore the on-screen position: a slot that was previously
+                # empty is parked off-screen, so a newly-added driver must be
+                # moved back or its button stays hidden.
+                bx, by = self.driver_btn_pos[i]
+                try:
+                    ac.setPosition(bid, bx, by)
+                except Exception:
+                    pass
                 self._set(bid, mark + name)
                 self._color(bid, ACCENT if name == self.selected else WHITE)
             else:

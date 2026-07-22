@@ -62,7 +62,9 @@ def setSize(*a):
     return 1
 
 
-def setPosition(*a):
+def setPosition(wid, x, y):
+    if wid in STATE.widgets:
+        STATE.widgets[wid]["pos"] = (x, y)
     return 1
 
 

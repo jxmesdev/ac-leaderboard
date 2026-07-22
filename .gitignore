@@ -15,6 +15,3 @@ _localdata/
 
 # Assetto Corsa crash reports (may contain a memory dump + your username)
 *.dmp
-
-# instrumented debug breadcrumb (push with: git add -f debug.log)
-debug.log

@@ -61,13 +61,18 @@ app.acUpdate(0.6)                         # session start -> auto-pick James
 print("track label:", mock_ac.STATE.widgets[app._app.l_track]["text"])
 print("car label:  ", mock_ac.STATE.widgets[app._app.l_car]["text"])
 
-# Add a driver by typing + Enter (validate -> pending -> acUpdate applies it),
-# then a second via "+ Add me".
+# Add a driver by typing + Enter (validate -> pending -> acUpdate applies it).
 mock_ac.validate(app._app.in_newuser, "Alex")
 app.acUpdate(1 / 60.0)
-mock_ac.click(app._app.b_addme)
-app.acUpdate(1 / 60.0)
 print("driver buttons:", driver_button_texts())
+
+# Regression check: a newly-added driver's button must be ON-SCREEN, not parked
+# at (-500, -500). (Bug: slots hidden as empty were never restored on add.)
+for i, name in enumerate(app._app.users):
+    pos = mock_ac.STATE.widgets[app._app.driver_btns[i]].get("pos")
+    assert pos != (-500, -500), "driver %s button is off-screen!" % name
+print("driver button positions on-screen:",
+      [mock_ac.STATE.widgets[app._app.driver_btns[i]]["pos"] for i in range(len(app._app.users))])
 
 # Select James (slot 0) for the lap.
 mock_ac.click(app._app.driver_btns[0])
