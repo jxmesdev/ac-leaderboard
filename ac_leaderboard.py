@@ -26,6 +26,12 @@ from acl_core.timefmt import format_ms
 
 APP_NAME = "AC Leaderboard"
 
+# One-shot diagnostic: when True, acUpdate applies a typed driver name and does
+# NOTHING else -- no ac.getCarState/getTrackName polling. This isolates whether
+# the Enter crash comes from car-state reads in the update loop (crash stops)
+# or from the built widgets (crash persists). Remove once identified.
+DIAG_INERT_UPDATE = True
+
 # Layout constants (pixels).
 WIN_W = 380
 MARGIN = 10
@@ -462,6 +468,11 @@ class LeaderboardApp(object):
                 log("update: clearing input")
                 self._set(self.in_newuser, "")
             log("update: pending handled")
+
+        if DIAG_INERT_UPDATE:
+            # Full UI is built, but the update loop makes zero ac.* calls. If
+            # Enter no longer crashes, the car-state polling below is the cause.
+            return
 
         # Mirror git status to the log from the MAIN thread (the worker thread
         # must never call ac.*). Cheap string compare each frame.
