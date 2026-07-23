@@ -28,12 +28,13 @@ APP_NAME = "AC Leaderboard"
 
 # Diagnostic build markers. BUILD is written to debug.log so we always know which
 # version produced a given log. DIAG_TELEMETRY=False disables per-frame sampling.
-BUILD = "minimal-update-v4"
+BUILD = "minimal-build-v5"
 DIAG_TELEMETRY = True
-# When True, acUpdate does NOTHING except apply a typed driver name -- no
-# telemetry, no git mirror, no per-0.5s track/car/best-lap ac.* reads. Used to
-# test whether ongoing acUpdate ac.* activity is what crashes AC on Enter.
+# When True, acUpdate does NOTHING except apply a typed driver name.
 DIAG_MINIMAL_UPDATE = True
+# When True, build() creates ONLY the window + label + text field (no driver
+# grid, no leaderboard, no other buttons) -- like the isolated test that worked.
+DIAG_MINIMAL_BUILD = True
 
 # Layout constants (pixels).
 WIN_W = 380
@@ -147,6 +148,14 @@ class LeaderboardApp(object):
             ac.drawBorder(self.window, 0)
         except Exception:
             pass
+
+        if DIAG_MINIMAL_BUILD:
+            # Only a label + text field, like the isolated test that worked.
+            self._label("New driver (type + Enter):", MARGIN, 34, 12)
+            self.in_newuser = self._text_input(MARGIN, 56, WIN_W - 2 * MARGIN, 22,
+                                               self._make_validate_cb())
+            dbg("build ok (MINIMAL: field only)")
+            return self
 
         y = 32
         self.l_track = self._label("Track: -", MARGIN, y, 13)
