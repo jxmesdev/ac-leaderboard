@@ -298,17 +298,20 @@
         // "Brabham Straight" split around the S/F line came first). Number
         // by wrap-aware position from the start line, corners only.
         if(globalSections){
-          var sorted=globalSections.slice().sort(function(x,y){ return x["in"]-y["in"]; });
-          var n=1;
-          sorted.forEach(function(sec){
-            // number CORNERS only: skip straights and named non-corner
-            // features like "Hailwoods Hill" (a hill, not a bend) -- but
-            // keep "Paddock Hill Bend" and friends.
-            var t=sec.text||"";
-            var nonCorner = /straight/i.test(t) ||
-              (/\bhill\b/i.test(t) && !/bend|curve|corner|hairpin|chicane/i.test(t));
-            if(nonCorner){ sec.turn=null; return; }
-            sec.turn=n++;
+          // Label with AC's own section NAMES -- turn numbers are human
+          // convention no data or geometry can recover reliably, so we
+          // don't invent them. Sections split around the S/F line (or
+          // otherwise sharing a name) get ONE label, on the longer piece.
+          var byName={};
+          globalSections.forEach(function(sec){
+            var t=(sec.text||"").trim();
+            sec.label=null;
+            if(!t) return;
+            var len=sec.out>=sec["in"] ? sec.out-sec["in"] : (1-sec["in"])+sec.out;
+            if(!byName[t] || len>byName[t].len) byName[t]={sec:sec, len:len};
+          });
+          Object.keys(byName).forEach(function(t){
+            byName[t].sec.label=t.replace(/\s+(Bend|Curve|Corner|Straight|Hill)$/i, "");
           });
         }
         scheduleRender();
@@ -908,10 +911,10 @@
     // turn numbers from AC's sections.ini (real data, published per track)
     if(globalSections && primary && primary.data){
       var fdm=primary.data;
-      ctx.font="italic 700 10px 'Chakra Petch',sans-serif";
+      ctx.font="italic 600 9px 'Chakra Petch',sans-serif";
       ctx.textAlign="center"; ctx.textBaseline="middle";
       globalSections.forEach(function(sec, si){
-        if(sec.turn==null) return;   // straights are named, not numbered
+        if(!sec.label) return;       // one label per named section
         var s0=sec["in"], s1=sec.out;
         var mid = s1>=s0 ? (s0+s1)/2 : ((s0+s1+1)/2)%1;
         var best=0, bd=1e9;
@@ -920,7 +923,7 @@
           if(dd<bd){ bd=dd; best=mi; }
         }
         var mp=P(fdm.x[best], fdm.z[best]);
-        var lbl="T"+sec.turn;
+        var lbl=sec.label;
         var tw2=ctx.measureText(lbl).width;
         ctx.fillStyle="rgba(10,10,11,0.78)";
         ctx.fillRect(mp[0]-tw2/2-4, mp[1]-20, tw2+8, 14);
@@ -989,7 +992,7 @@
       for(var gi=0; gi<globalSections.length; gi++){
         var gs=globalSections[gi], g0=gs["in"], g1=gs.out;
         var inSec = g1>=g0 ? (cursor>=g0 && cursor<g1) : (cursor>=g0 || cursor<g1);
-        if(inSec){ cp.textContent += "  ·  " + (gs.text || (gs.turn!=null?"T"+gs.turn:"")); break; }
+        if(inSec){ if(gs.text) cp.textContent += "  ·  " + gs.text; break; }
       }
     }
     var html = "<thead><tr><th>Lap</th>";
