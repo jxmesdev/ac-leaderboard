@@ -30,11 +30,15 @@ APP_NAME = "AC Leaderboard"
 # On the rig: test Enter ~10x, then edit this ONE number, restart AC, repeat.
 # Report the highest level that survives.
 #
-#   0 = exact bare test app (field + counter label; ac.log only).  [= textbox_test]
-#   1 = + dbg() file logging with fsync (debug.log breadcrumbs)
-#   2 = + the acl_core imports (json/zlib/struct etc. enter the interpreter)
-#   3 = + Config/Store/LapRecorder objects (reads config.json + users.json)
-#   4 = full app (everything except git, which stays off)
+#   0 = exact bare test app (field + counter label; ac.log only).  [SURVIVED]
+#   1 = + dbg() file logging with fsync (debug.log breadcrumbs)     [SURVIVED]
+#   2 = + the acl_core imports                                      [SURVIVED]
+#   3 = + Config/Store/LapRecorder objects                          [SURVIVED]
+#   -- old level 4 (everything below at once) CRASHED; now split: --
+#   4 = + class validate closure + live per-frame update machinery
+#   5 = + window dressing (setTitle/setBackgroundOpacity/drawBorder/big size)
+#   6 = + all the labels (track/car/status/leaderboard rows)
+#   7 = full UI (driver-grid + auto-capture buttons)   [= old level 4]
 # =============================================================================
 DIAG_LEVEL = int(os.environ.get("ACL_DIAG_LEVEL", "4"))
 
@@ -168,6 +172,11 @@ class LeaderboardApp(object):
 
     # -- construction -----------------------------------------------------
     def build(self):
+        # Ladder gates: level 5 adds window dressing, 6 adds labels, 7 adds
+        # buttons. (Levels below 5 never call build() -- they use _bare_build.)
+        with_labels = DIAG_LEVEL >= 6
+        with_buttons = DIAG_LEVEL >= 7 and not DIAG_NO_BUTTONS
+
         driver_grid_rows = (MAX_DRIVERS + DRIVER_COLS - 1) // DRIVER_COLS
         win_h = 150 + driver_grid_rows * 26 + 140 + self._rows * ROW_H
         self.window = ac.newApp(APP_NAME)
@@ -180,16 +189,17 @@ class LeaderboardApp(object):
             pass
 
         y = 32
-        self.l_track = self._label("Track: -", MARGIN, y, 13)
-        y += 18
-        self.l_car = self._label("Car: -", MARGIN, y, 13)
-        y += 26
+        if with_labels:
+            self.l_track = self._label("Track: -", MARGIN, y, 13)
+            y += 18
+            self.l_car = self._label("Car: -", MARGIN, y, 13)
+            y += 26
 
-        self._label("Driver  (click to select):", MARGIN, y, 13)
-        y += 20
+            self._label("Driver  (click to select):", MARGIN, y, 13)
+            y += 20
 
         # Clickable driver grid (2 columns). Empty slots are parked off-screen.
-        if not DIAG_NO_BUTTONS:
+        if with_buttons:
             col_w = (WIN_W - (DRIVER_COLS + 1) * MARGIN) // DRIVER_COLS
             grid_y0 = y
             for i in range(MAX_DRIVERS):
@@ -211,32 +221,34 @@ class LeaderboardApp(object):
 
         # Add a driver: type a name + Enter. (No "+ Add me" button -- it triggered
         # a native crash on this rig; typing is the single, reliable path.)
-        self._label("New driver (type + Enter):", MARGIN, y, 12)
-        y += 16
+        if with_labels:
+            self._label("New driver (type + Enter):", MARGIN, y, 12)
+            y += 16
         self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 22,
                                            self._make_validate_cb())
         y += 28
-        if not DIAG_NO_BUTTONS:
+        if with_buttons:
             self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
                                        self.on_toggle_auto)
             y += 28
 
-        # Status line.
-        self.l_status = self._label("", MARGIN, y, 12)
-        y += 22
+        if with_labels:
+            # Status line.
+            self.l_status = self._label("", MARGIN, y, 12)
+            y += 22
 
-        # Leaderboard header + rows (4 aligned columns).
-        self._label("#", self.cx_pos, y, 13)
-        self._label("Driver", self.cx_user, y, 13)
-        self._label("Time", self.cx_time, y, 13)
-        self._label("Gap", self.cx_gap, y, 13)
-        y += ROW_H
-        for _ in range(self._rows):
-            self.row_pos.append(self._label("", self.cx_pos, y, 13))
-            self.row_user.append(self._label("", self.cx_user, y, 13))
-            self.row_time.append(self._label("", self.cx_time, y, 13))
-            self.row_gap.append(self._label("", self.cx_gap, y, 13))
+            # Leaderboard header + rows (4 aligned columns).
+            self._label("#", self.cx_pos, y, 13)
+            self._label("Driver", self.cx_user, y, 13)
+            self._label("Time", self.cx_time, y, 13)
+            self._label("Gap", self.cx_gap, y, 13)
             y += ROW_H
+            for _ in range(self._rows):
+                self.row_pos.append(self._label("", self.cx_pos, y, 13))
+                self.row_user.append(self._label("", self.cx_user, y, 13))
+                self.row_time.append(self._label("", self.cx_time, y, 13))
+                self.row_gap.append(self._label("", self.cx_gap, y, 13))
+                y += ROW_H
 
         if not self.cfg.repo_configured():
             self._set_status("not a git clone -- times save locally, no push")
@@ -463,6 +475,8 @@ class LeaderboardApp(object):
         self._set(self.l_status, self.status_text)
 
     def _refresh_board(self):
+        if not self.row_pos:
+            return   # ladder levels without leaderboard labels
         rows = leaderboard_for(self.store.records, self.track,
                                self.track_config, self.car)
         for i in range(self._rows):
@@ -622,7 +636,7 @@ def _bare_validate(value):
             pass
 
 
-def _bare_build(window_name):
+def _bare_build(window_name, validate_cb=None):
     global _bare_label, _bare_input
     app = ac.newApp(window_name)
     ac.setSize(app, 340, 120)
@@ -633,7 +647,7 @@ def _bare_build(window_name):
     _bare_input = ac.addTextInput(app, "")
     ac.setPosition(_bare_input, 10, 58)
     ac.setSize(_bare_input, 320, 26)
-    ac.addOnValidateListener(_bare_input, _bare_validate)
+    ac.addOnValidateListener(_bare_input, validate_cb or _bare_validate)
 
 
 def acMain(ac_version):
@@ -649,9 +663,15 @@ def acMain(ac_version):
         if DIAG_LEVEL >= 3:
             _app = LeaderboardApp()   # Config/Store/LapRecorder objects
             dbg("acMain: objects created")
-        if DIAG_LEVEL >= 4:
-            _app.build()              # full UI + full class validate path
+        if DIAG_LEVEL >= 5:
+            _app.build()              # dressing (5) / +labels (6) / +buttons (7)
             dbg("acMain: build ok")
+        elif DIAG_LEVEL == 4:
+            # Bare window/field, but the CLASS validate closure + live update
+            # machinery handle Enter (the pending-driver path).
+            _bare_build(APP_NAME, _app._make_validate_cb())
+            _app.in_newuser = _bare_input
+            dbg("acMain: bare build + class validate")
         else:
             _bare_build(APP_NAME)     # exact bare-test window + field
             if DIAG_LEVEL >= 1:
