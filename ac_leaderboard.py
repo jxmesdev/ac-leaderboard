@@ -34,9 +34,13 @@ APP_NAME = "AC Leaderboard"
 #   1 = + dbg() file logging with fsync (debug.log breadcrumbs)     [SURVIVED]
 #   2 = + the acl_core imports                                      [SURVIVED]
 #   3 = + Config/Store/LapRecorder objects                          [SURVIVED]
-#   -- old level 4 (closure + live update together) CRASHED; split again: --
-#   4 = + class validate CLOSURE only (acUpdate still returns immediately)
-#   5 = + live per-frame update machinery (_app.update runs each frame)
+#   -- CLOSURE-only level 4 CRASHED => CULPRIT FOUND: registering a CLOSURE
+#      with ac.addOnValidateListener crashes AC natively on Enter; a plain
+#      module-level function is fine (proven by levels 0-3, 10+ Enters each).
+#      THE FIX: validate is now a module-level function stashing into a module
+#      global. Remaining rungs verify the rest of the app on top of the fix: --
+#   4 = plain-function validate stashing the typed name (acUpdate inert)
+#   5 = + live per-frame update machinery (applies the typed name -> driver)
 #   6 = + window dressing (setTitle/setBackgroundOpacity/drawBorder/big size)
 #   7 = + all the labels (track/car/status/leaderboard rows)
 #   8 = full UI (driver-grid + auto-capture buttons)
@@ -111,6 +115,28 @@ def log(msg):
         pass
 
 
+# THE Enter handler. It MUST be a plain module-level function: registering a
+# closure (or bound method) with ac.addOnValidateListener crashes AC natively
+# on Enter (proven on-rig by the diagnostic ladder -- levels 0-3 with a plain
+# function survived 10+ Enters each; an otherwise-identical build registering
+# a closure crashed instantly). It only stashes the typed text; the app's
+# update loop consumes it next tick, outside the input's event handler.
+_typed_name = None
+
+
+def _on_validate_typed(value):
+    global _typed_name
+    _typed_name = value
+    dbg("validate fired: " + repr(value))
+
+
+def _consume_typed_name():
+    global _typed_name
+    v = _typed_name
+    _typed_name = None
+    return v
+
+
 class LeaderboardApp(object):
     def __init__(self):
         self.window = None
@@ -147,8 +173,6 @@ class LeaderboardApp(object):
         # AC's keyboard input on Enter).
         self._moving = False
         self._rows = int(self.cfg.get("leaderboard_rows") or 10)
-        # A typed name (Enter); applied on the next acUpdate tick.
-        self._pending_driver = None
 
         # telemetry recording
         self.record_telemetry = bool(self.cfg.get("record_telemetry"))
@@ -226,7 +250,7 @@ class LeaderboardApp(object):
             self._label("New driver (type + Enter):", MARGIN, y, 12)
             y += 16
         self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 22,
-                                           self._make_validate_cb())
+                                           _on_validate_typed)
         y += 28
         if with_buttons:
             self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
@@ -274,8 +298,11 @@ class LeaderboardApp(object):
         bid = ac.addButton(self.window, text)
         ac.setPosition(bid, x, y)
         ac.setSize(bid, w, h)
-        # Wrap in a closure: AC's listeners fire closures reliably but not bound
-        # methods (see _make_validate_cb). cb here is usually a bound method.
+        # Wrap in a closure: addOnClickedListener fires closures reliably but
+        # not bound methods (cb here is usually a bound method). NB: this is
+        # CLICK listeners only -- addOnValidateListener requires a plain
+        # module-level function (closures crash AC natively; see
+        # _on_validate_typed).
         def clicked(px, py):
             cb(px, py)
         ac.addOnClickedListener(bid, clicked)
@@ -295,20 +322,6 @@ class LeaderboardApp(object):
         except Exception:
             log("addTextInput unavailable")
             return None
-
-    def _make_validate_cb(self):
-        # Return a CLOSURE (not a bound method). AC's addOnValidateListener
-        # fires plain functions/closures reliably but not bound methods -- the
-        # same reason the driver-grid buttons use _make_pick_cb closures.
-        def cb(name):
-            self.on_new_driver_name(name)
-        return cb
-
-    def on_new_driver_name(self, name):
-        # Validate (Enter) callback: only stash the name; the add happens next
-        # tick in acUpdate, outside the input's event handler.
-        dbg("validate fired: " + repr(name))
-        self._pending_driver = name
 
     def _color(self, lid, rgba):
         try:
@@ -507,11 +520,12 @@ class LeaderboardApp(object):
 
     # -- per-frame update -------------------------------------------------
     def update(self, dt):
-        # A typed name (Enter) stashes into _pending_driver; apply it here,
+        # A typed name (Enter) stashes into the module-level _typed_name (the
+        # validate handler must be a plain module function); apply it here,
         # outside the input's event handler.
-        if self._pending_driver is not None:
-            name = (self._pending_driver or "").strip()
-            self._pending_driver = None
+        pending = _consume_typed_name()
+        if pending is not None:
+            name = (pending or "").strip()
             log("update: pending driver " + repr(name))
             if name:
                 self._add_driver(name)
@@ -668,12 +682,13 @@ def acMain(ac_version):
             _app.build()              # dressing (6) / +labels (7) / +buttons (8)
             dbg("acMain: build ok")
         elif DIAG_LEVEL in (4, 5):
-            # Bare window/field, but the CLASS validate closure handles Enter.
-            # Level 4: acUpdate still returns immediately (closure only).
-            # Level 5: acUpdate additionally runs _app.update each frame.
-            _bare_build(APP_NAME, _app._make_validate_cb())
+            # Bare window/field with the FIXED plain-function validate handler.
+            # Level 4: acUpdate still returns immediately (handler only).
+            # Level 5: acUpdate additionally runs _app.update each frame,
+            #          which consumes the typed name and adds the driver.
+            _bare_build(APP_NAME, _on_validate_typed)
             _app.in_newuser = _bare_input
-            dbg("acMain: bare build + class validate")
+            dbg("acMain: bare build + plain-function validate")
         else:
             _bare_build(APP_NAME)     # exact bare-test window + field
             if DIAG_LEVEL >= 1:
