@@ -296,13 +296,15 @@
   function applyTitles(){
     var combo = pretty(primary.rec.track) + (primary.rec.config? " ("+pretty(primary.rec.config)+")":"") + " — " + pretty(primary.rec.car);
     document.getElementById("title").textContent = combo;
+    // uniform 6px gaps between label, trophy, name, dot, time
     document.getElementById("subtitle").innerHTML =
       "<b style='color:var(--text)'>Primary Lap:</b>" +
-      "<span style='margin-left:10px'>" +
-      (primary.trophy ? primary.trophy + "<span style='margin-left:8px'></span>" : "") +
-      esc(primary.rec.user) + "</span>" +
-      "<span style='margin:0 10px;color:var(--line)'>&middot;</span>" +
-      fmtTime(primary.rec.time_ms);
+      (primary.trophy ? "<span>" + primary.trophy + "</span>" : "") +
+      "<span>" + esc(primary.rec.user) + "</span>" +
+      "<span style='color:var(--line)'>&middot;</span>" +
+      "<span>" + fmtTime(primary.rec.time_ms) + "</span>";
+    document.getElementById("subtitle").style.cssText =
+      "display:flex;gap:6px;align-items:baseline;flex-wrap:wrap";
     document.title = "Telemetry · " + primary.rec.user + " · " + combo;
   }
 
