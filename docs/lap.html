@@ -19,6 +19,10 @@
   .wrap { max-width:1100px; margin:0 auto; padding:18px 16px 60px; }
   a { color:var(--accent); text-decoration:none; }
   a:hover { text-decoration:underline; }
+  a.brand { display:block; color:var(--text); margin-bottom:16px; }
+  a.brand:hover { text-decoration:none; }
+  .brand h1 { font-size:26px; margin:0 0 4px; letter-spacing:.3px; }
+  .brand p { margin:0; color:var(--muted); font-size:13px; }
   .top { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
   h1 { font-size:20px; margin:0 0 2px; }
   .sub { color:var(--muted); font-size:13px; }
@@ -47,16 +51,41 @@
   .hint { color:var(--muted); font-size:12px; padding:0 14px 12px; }
   canvas.trace { width:100%; display:block; touch-action:none; }
   .empty { padding:40px; text-align:center; color:var(--muted); }
+  .sectors { margin-top:16px; }
+  .secbody { padding:10px 14px 12px; }
+  .secbtns { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .secbtns button { background:var(--panel2); color:var(--text); border:1px solid var(--line);
+    border-radius:6px; padding:3px 12px; font:12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    cursor:pointer; }
+  .secbtns button:hover { border-color:var(--muted); }
+  .secbtns button.on { border-color:var(--accent); color:var(--accent); }
+  .sectable { border-collapse:collapse; font-size:12px; }
+  .sectable th, .sectable td { text-align:right; padding:3px 0 3px 22px;
+    font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; }
+  .sectable th:first-child, .sectable td:first-child { text-align:left; padding-left:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .sectable thead th { color:var(--muted); font-weight:600; }
+  .secmuted { color:var(--muted); font-size:12px; }
+  #tt { position:fixed; display:none; z-index:20; pointer-events:none;
+    background:var(--panel2); border:1px solid var(--line); border-radius:8px;
+    padding:6px 9px; font-size:12px; box-shadow:0 4px 14px rgba(0,0,0,.35);
+    font-variant-numeric:tabular-nums; }
+  #tt .tth { color:var(--muted); margin-bottom:3px; }
+  #tt .ttr { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+  #tt .ttr b { font-weight:600; font-family:ui-monospace,Menlo,monospace; margin-left:auto; padding-left:10px; }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <a class="brand" href="index.html">
+    <h1>🏁 Bradford Leaderboard</h1>
+    <p>Fastest valid laps per track &amp; car combination.</p>
+  </a>
   <div class="top">
     <div>
       <h1 id="title">Lap telemetry</h1>
       <div class="sub" id="subtitle">Loading…</div>
     </div>
-    <a id="back" href="index.html">← Leaderboard</a>
   </div>
 
   <div id="content" style="display:none">
@@ -76,11 +105,16 @@
         <div class="hint">Hover the traces or map to inspect. Δ = time gap to the primary lap at that point.</div>
       </div>
     </div>
+    <div class="card sectors" id="sectors" style="display:none">
+      <h2>Sectors</h2>
+      <div class="secbody" id="secbody"></div>
+    </div>
     <div class="card traces" id="traces"></div>
   </div>
 
   <div id="error" class="empty" style="display:none"></div>
 </div>
+<div id="tt"></div>
 
 <script>
 (function () {
@@ -99,7 +133,8 @@
     track: (qs.get("t")||"").toLowerCase(),
     config:(qs.get("c")||"").toLowerCase(),
     car:   (qs.get("car")||"").toLowerCase(),
-    driver:(qs.get("d")||"").toLowerCase()
+    driver:(qs.get("d")||"").toLowerCase(),
+    ms:    parseInt(qs.get("ms")||"",10)
   };
 
   var laps = [];        // {rec, color, shown, data|null, loading}
@@ -107,6 +142,9 @@
   var cursor = null;    // nsp 0..1 or null
   var raf = 0;
   var cam = {scale:1, x:0, y:0};   // map zoom/pan on top of the fit-to-view
+  var focus = null;     // {i, d0, d1} sector focus (nsp domain), null = whole lap
+  var mapFitPending = false;   // drawMap should recompute cam for the focus
+  var mapP = null;      // world->screen transform of the LAST drawMap (for map hover)
 
   function pretty(id){ return (id||"").replace(/_/g," ").replace(/\b\w/g,function(c){return c.toUpperCase();}); }
   function fmtTime(ms){ if(ms==null) return "—"; var m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),mm=ms%1000;
@@ -114,6 +152,9 @@
   function norm(s){ return (s==null?"":String(s)).trim().toLowerCase(); }
   // Mirrors acl_core.telemetry.slug: lowercase, non-alphanumerics -> "_".
   function slugjs(s){ return norm(s).replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,""); }
+  // Driver names are user-typed in-game: escape wherever they enter innerHTML.
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
   var globalEdges=null;   // per-track true boundary, fetched by convention
   function comboMatch(r){ return norm(r.track)===want.track && norm(r.config||"")===want.config && norm(r.car)===want.car; }
   function getJSON(u){ return fetch(u,{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error(u+" "+r.status); return r.json(); }); }
@@ -127,7 +168,20 @@
     if(!roster.length){ fail("No telemetry found for this track & car combination."); return; }
 
     laps = roster.map(function(r,i){ return {rec:r, color:PALETTE[i%PALETTE.length], shown:false, data:null, loading:false}; });
-    primary = laps.filter(function(l){ return norm(l.rec.user)===want.driver; })[0] || laps[0];
+    // trophies: within the combo, each driver's own laps ranked by time
+    // (roster is time-sorted, so per-driver encounter order == their rank)
+    var perDriver = {};
+    laps.forEach(function(l){
+      var k=norm(l.rec.user), c=perDriver[k]||0; perDriver[k]=c+1;
+      l.trophy = ["🥇","🥈","🥉"][c] || "";
+    });
+    // primary: exact ?ms lap of driver d -> driver d's fastest -> fastest overall
+    var mine = laps.filter(function(l){ return norm(l.rec.user)===want.driver; });
+    primary = null;
+    if(!isNaN(want.ms)){
+      primary = mine.filter(function(l){ return l.rec.time_ms===want.ms; })[0] || null;
+    }
+    if(!primary) primary = mine[0] || laps[0];
 
     var combo = pretty(primary.rec.track) + (primary.rec.config? " ("+pretty(primary.rec.config)+")":"") + " — " + pretty(primary.rec.car);
     document.getElementById("title").textContent = combo;
@@ -155,7 +209,8 @@
       var cb=document.createElement("input"); cb.type="checkbox"; cb.checked=l.shown;
       cb.addEventListener("change",function(){ toggleLap(l, cb.checked); });
       var sw=document.createElement("span"); sw.className="swatch"; sw.style.background=l.color;
-      var nm=document.createElement("span"); nm.className="nm"; nm.textContent=l.rec.user;
+      var nm=document.createElement("span"); nm.className="nm";
+      nm.textContent=(l.trophy? l.trophy+" ":"")+l.rec.user;
       var tm=document.createElement("span"); tm.className="tm"; tm.textContent=fmtTime(l.rec.time_ms);
       row.appendChild(cb); row.appendChild(sw); row.appendChild(nm); row.appendChild(tm);
       l._sw = sw; l._cb = cb;
@@ -186,7 +241,7 @@
   var traceCanvases=[];
   function buildTraceCanvases(){
     var host=document.getElementById("traces"); host.innerHTML="";
-    var h=document.createElement("h2"); h.textContent="Traces (vs distance)"; host.appendChild(h);
+    var h=document.createElement("h2"); h.textContent="Traces"; host.appendChild(h);
     CH.forEach(function(ch){
       var wrap=document.createElement("div"); wrap.style.padding="4px 8px";
       var cv=document.createElement("canvas"); cv.className="trace"; cv.dataset.key=ch.key;
@@ -211,6 +266,7 @@
     drawMap(sl);
     traceCanvases.forEach(function(t){ drawTrace(t.cv, t.ch, sl); });
     drawReadout(sl);
+    renderSectors(sl);
   }
 
   function setupCanvas(cv, cssH){
@@ -240,8 +296,21 @@
   }
 
   var PADL=42, PADR=10, PADT=8, PADB=18;
+  // current x-domain of the traces (nsp units) — [0,1] or the focused sector
+  function traceDomain(){ return focus? [focus.d0, focus.d1] : [0,1]; }
+  // ~n "nice" tick values covering [lo,hi]; integer=true forces whole steps
+  function niceTicks(lo, hi, n, integer){
+    var span=hi-lo; if(!(span>0)) return [lo];
+    var step=Math.pow(10, Math.floor(Math.log(span/n)/Math.LN10));
+    var err=span/(n*step);
+    if(err>=7.5) step*=10; else if(err>=3.5) step*=5; else if(err>=1.5) step*=2;
+    if(integer) step=Math.max(1, Math.round(step));
+    var ticks=[], v=Math.ceil(lo/step-1e-9)*step;
+    for(; v<=hi+step*1e-6; v+=step) ticks.push(Math.round(v*1000)/1000);
+    return ticks;
+  }
   function drawTrace(cv, ch, sl){
-    var g=setupCanvas(cv, ch.step?90:96), ctx=g.ctx, w=g.w, h=g.h;
+    var g=setupCanvas(cv, ch.step?124:132), ctx=g.ctx, w=g.w, h=g.h;
     var plotW=w-PADL-PADR, plotH=h-PADT-PADB;
     ctx.clearRect(0,0,w,h);
     var linec=css("--line"), muted=css("--muted"), textc=css("--text");
@@ -253,38 +322,42 @@
     ctx.fillText(ch.label+(ch.unit?(" ("+ch.unit+")"):""), PADL+4, PADT+3);
     if(!sl.length){ return; }
     var rg=chRange(ch, sl), lo=rg[0], hi=rg[1];
-    // y gridline at 0 for steering
-    ctx.textAlign="right"; ctx.textBaseline="middle";
-    [lo,hi,(ch.lo==="sym"?0:null)].forEach(function(val){
-      if(val===null) return;
-      var y=PADT+plotH-(val-lo)/(hi-lo)*plotH;
-      ctx.strokeStyle=linec; ctx.globalAlpha=(val===0?0.9:0.5); ctx.beginPath();
-      ctx.moveTo(PADL,y); ctx.lineTo(PADL+plotW,y); ctx.stroke(); ctx.globalAlpha=1;
-      ctx.fillStyle=muted; ctx.fillText(ch.step?String(Math.round(val)):String(Math.round(val)), PADL-4, y);
+    var dom=traceDomain(), dspan=(dom[1]-dom[0])||1;
+    function xOf(p){ return PADL+(p-dom[0])/dspan*plotW; }
+    function yOf(v){ return PADT+plotH-(v-lo)/(hi-lo)*plotH; }
+    // horizontal gridlines at ~5 nice y-ticks, muted labels
+    ctx.textAlign="right"; ctx.textBaseline="middle"; ctx.font="10px -apple-system,sans-serif";
+    niceTicks(lo, hi, 5, !!ch.step).forEach(function(val){
+      var y=yOf(val);
+      if(y<PADT-0.5 || y>PADT+plotH+0.5) return;
+      ctx.strokeStyle=linec; ctx.globalAlpha=(val===0&&ch.lo==="sym"?0.9:0.35);
+      ctx.beginPath(); ctx.moveTo(PADL,y); ctx.lineTo(PADL+plotW,y); ctx.stroke(); ctx.globalAlpha=1;
+      ctx.fillStyle=muted; ctx.fillText(String(val), PADL-4, y);
     });
-    // traces
+    // traces + cursor, clipped to the plot so sector focus just works
+    ctx.save();
+    ctx.beginPath(); ctx.rect(PADL, PADT, plotW, plotH); ctx.clip();
     sl.forEach(function(l){
       var xs=l.data.nsp, ys=l.data[ch.key], n=xs.length;
       ctx.strokeStyle=l.color; ctx.lineWidth=(l===primary?1.8:1.3); ctx.globalAlpha=0.95;
       ctx.beginPath();
       for(var i=0;i<n;i++){
-        var x=PADL+xs[i]*plotW;
-        var y=PADT+plotH-(ys[i]-lo)/(hi-lo)*plotH;
+        var x=xOf(xs[i]), y=yOf(ys[i]);
         if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
       }
       ctx.stroke(); ctx.globalAlpha=1;
     });
     // cursor
-    if(cursor!=null){
-      var cx=PADL+cursor*plotW;
+    if(cursor!=null && cursor>=dom[0]-1e-6 && cursor<=dom[1]+1e-6){
+      var cx=xOf(cursor);
       ctx.strokeStyle=textc; ctx.globalAlpha=0.5; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(cx,PADT); ctx.lineTo(cx,PADT+plotH); ctx.stroke(); ctx.globalAlpha=1;
       sl.forEach(function(l){
         var s=sampleAt(l.data, cursor); if(!s) return;
-        var y=PADT+plotH-(s[ch.key]-lo)/(hi-lo)*plotH;
-        ctx.fillStyle=l.color; ctx.beginPath(); ctx.arc(cx,y,2.6,0,7); ctx.fill();
+        ctx.fillStyle=l.color; ctx.beginPath(); ctx.arc(cx,yOf(s[ch.key]),2.6,0,7); ctx.fill();
       });
     }
+    ctx.restore();
   }
 
   function trackEdges(){ return globalEdges || (primary && primary.data ? primary.data.edges : null); }
@@ -379,7 +452,7 @@
     var g=setupCanvas(cv, Math.max(240, Math.min(440, cv.clientWidth))), ctx=g.ctx, w=g.w, h=g.h;
     ctx.clearRect(0,0,w,h);
     var tm=trackImgMeta(), e=trackEdges();
-    if(!sl.length && !e && !tm){ return; }
+    if(!sl.length && !e && !tm){ mapP=null; return; }
 
     // "map space": real map.png pixels when we have a track map, else world
     // metres. AC's map.ini transform is (world + OFFSET) / SCALE_FACTOR.
@@ -402,12 +475,37 @@
     var pad=18, spanX=(maxX-minX)||1, spanY=(maxY-minY)||1;
     var base=Math.min((w-2*pad)/spanX,(h-2*pad)/spanY);
     var ox=(w-spanX*base)/2, oy=(h-spanY*base)/2;
-    function S(mx,my){
+    function sBase(mx,my){   // fit-to-view screen coords, BEFORE cam pan/zoom
       var sx=ox+(mx-minX)*base;
       var sy=flip ? (h-(oy+(my-minY)*base)) : (oy+(my-minY)*base);
-      return [sx*cam.scale+cam.x, sy*cam.scale+cam.y];
+      return [sx,sy];
     }
+    function S(mx,my){ var b=sBase(mx,my); return [b[0]*cam.scale+cam.x, b[1]*cam.scale+cam.y]; }
     function P(x,z){ var m=toMap(x,z); return S(m[0],m[1]); }
+    mapP = P;   // map-hover uses the exact transform of the last draw
+
+    // sector focus: aim the cam at the primary lap's points in that sector
+    if(mapFitPending){
+      mapFitPending=false;
+      if(focus && primary && primary.data){
+        var fd=primary.data, b0x=Infinity,b1x=-Infinity,b0y=Infinity,b1y=-Infinity;
+        for(var fi=0; fi<fd.nsp.length; fi++){
+          if(fd.nsp[fi]<focus.d0 || fd.nsp[fi]>focus.d1) continue;
+          var fm=toMap(fd.x[fi],fd.z[fi]), fb=sBase(fm[0],fm[1]);
+          if(fb[0]<b0x)b0x=fb[0]; if(fb[0]>b1x)b1x=fb[0];
+          if(fb[1]<b0y)b0y=fb[1]; if(fb[1]>b1y)b1y=fb[1];
+        }
+        if(isFinite(b0x)){
+          var fpad=26;
+          var fsc=Math.min((w-2*fpad)/Math.max(1e-6,b1x-b0x),
+                           (h-2*fpad)/Math.max(1e-6,b1y-b0y));
+          fsc=Math.max(1, Math.min(14, fsc));
+          cam={scale:fsc, x:w/2-(b0x+b1x)/2*fsc, y:h/2-(b0y+b1y)/2*fsc};
+        }
+      } else {
+        cam={scale:1, x:0, y:0};
+      }
+    }
 
     // Background priority: TRUE edges (from ai/fast_lane.ai, world coords --
     // exact width and exact alignment with the laps by construction), else
@@ -470,6 +568,24 @@
       cam.x+=(e.clientX-lx); cam.y+=(e.clientY-ly); lx=e.clientX; ly=e.clientY; scheduleRender(); });
     cv.addEventListener("dblclick", function(){ cam={scale:1,x:0,y:0}; scheduleRender(); });
     cv.style.cursor="grab";
+    // hover -> cursor: nearest PRIMARY-lap sample in screen space (<=25 px),
+    // via the exact transform of the last draw so pan/zoom is accounted for.
+    cv.addEventListener("mousemove", function(e){
+      if(dragging) return;
+      if(!mapP || !(primary && primary.data)) return;
+      var r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+      var d=primary.data, X=d.x, Z=d.z, best=-1, bd=25*25;
+      for(var i=0;i<X.length;i++){
+        var p=mapP(X[i],Z[i]);
+        var dx=p[0]-mx, dy=p[1]-my, q=dx*dx+dy*dy;
+        if(q<bd){ bd=q; best=i; }
+      }
+      var nc = best>=0 ? d.nsp[best] : null;
+      if(nc!==cursor){ cursor=nc; scheduleRender(); }
+    });
+    cv.addEventListener("mouseleave", function(){
+      if(cursor!=null){ cursor=null; scheduleRender(); }
+    });
   }
 
   function drawReadout(sl){
@@ -485,7 +601,7 @@
     var p = primary && primary.shown && primary.data ? sampleAt(primary.data, cursor) : null;
     sl.forEach(function(l){
       var s=sampleAt(l.data, cursor); if(!s) return;
-      html += "<tr><td><span class='swatch' style='display:inline-block;background:"+l.color+"'></span> "+l.rec.user+"</td>";
+      html += "<tr><td><span class='swatch' style='display:inline-block;background:"+l.color+"'></span> "+esc(l.rec.user)+"</td>";
       html += "<td>"+Math.round(s.thr)+"</td><td>"+Math.round(s.brk)+"</td><td>"+Math.round(s.spd)+"</td>";
       html += "<td>"+Math.round(s.gear)+"</td><td>"+s.str.toFixed(0)+"</td>";
       var dl="";
@@ -493,6 +609,102 @@
       html += "<td class='dl' style='color:"+(dl&&dl[0]==="+"?"#f85149":(dl?"#3fb950":"var(--muted)"))+"'>"+dl+"</td></tr>";
     });
     t.innerHTML = html+"</tbody>";
+  }
+
+  // ---- sectors --------------------------------------------------------
+  function splitsOf(l){
+    if(!l) return null;
+    if(l.data && Array.isArray(l.data.splits) && l.data.splits.length) return l.data.splits;
+    if(l.rec && Array.isArray(l.rec.splits) && l.rec.splits.length) return l.rec.splits;
+    return null;
+  }
+  function fmtSec(ms){ return (ms/1000).toFixed(3); }
+  // nsp (distance fraction) where the primary lap's cumulative time crosses T
+  function nspAtTime(d, T){
+    var t=d.t, n=t.length; if(!n) return 0;
+    if(T<=t[0]) return d.nsp[0];
+    if(T>=t[n-1]) return d.nsp[n-1];
+    var lo=0, hi=n-1;
+    while(lo<hi-1){ var mid=(lo+hi)>>1; if(t[mid]<T) lo=mid; else hi=mid; }
+    var f=(T-t[lo])/((t[hi]-t[lo])||1);
+    return d.nsp[lo]+(d.nsp[hi]-d.nsp[lo])*f;
+  }
+  var _bounds=null;   // cached per-sector [d0,d1] nsp ranges of the primary lap
+  function sectorBounds(){
+    if(_bounds) return _bounds;
+    if(!(primary && primary.data)) return null;
+    var sp=splitsOf(primary); if(!sp) return null;
+    var cuts=[0], cum=0;
+    for(var i=0;i<sp.length-1;i++){ cum+=sp[i]; cuts.push(nspAtTime(primary.data, cum)); }
+    cuts.push(1);
+    _bounds=[];
+    for(var k=0;k<sp.length;k++) _bounds.push([cuts[k], cuts[k+1]]);
+    return _bounds;
+  }
+  function focusSector(i){
+    var b=sectorBounds(); if(!b || !b[i]) return;
+    focus={i:i, d0:b[i][0], d1:b[i][1]};
+    mapFitPending=true; secSig=""; scheduleRender();
+  }
+  function focusAll(){
+    focus=null; mapFitPending=true; secSig=""; scheduleRender();
+  }
+  var secSig="";
+  function renderSectors(sl){
+    var card=document.getElementById("sectors"), body=document.getElementById("secbody");
+    if(!(primary && primary.data)){ card.style.display="none"; secSig=""; return; }
+    var ps=splitsOf(primary);
+    var sig=(ps?ps.join(","):"none")+"|"+(focus?focus.i:-1)+"|"+
+      sl.map(function(l){ return l.rec.telemetry; }).join(";");
+    if(sig===secSig) return;
+    secSig=sig;
+    card.style.display="";
+    body.innerHTML="";
+    if(!ps){
+      var mu=document.createElement("div"); mu.className="secmuted";
+      mu.textContent="No sector data — lap predates sector recording.";
+      body.appendChild(mu);
+      return;
+    }
+    // focus buttons [S1]..[Sn][All]
+    var bar=document.createElement("div"); bar.className="secbtns";
+    ps.forEach(function(_, i){
+      var b=document.createElement("button"); b.textContent="S"+(i+1);
+      if(focus && focus.i===i) b.className="on";
+      b.addEventListener("click", function(){ focusSector(i); });
+      bar.appendChild(b);
+    });
+    var all=document.createElement("button"); all.textContent="All";
+    if(!focus) all.className="on";
+    all.addEventListener("click", focusAll);
+    bar.appendChild(all);
+    body.appendChild(bar);
+    // sector times: primary plain, other shown laps colored vs primary
+    var html="<thead><tr><th>Lap</th>";
+    ps.forEach(function(_, i){ html+="<th>S"+(i+1)+"</th>"; });
+    html+="</tr></thead><tbody>";
+    function rowFor(l, sp){
+      var r="<tr><td><span class='swatch' style='display:inline-block;background:"+l.color+
+        "'></span> "+(l.trophy? l.trophy+" ":"")+esc(l.rec.user)+"</td>";
+      for(var i=0;i<ps.length;i++){
+        if(i>=sp.length){ r+="<td></td>"; continue; }
+        var col="";
+        if(l!==primary){
+          if(sp[i]<ps[i]) col="color:#3fb950"; else if(sp[i]>ps[i]) col="color:#f85149";
+        }
+        r+="<td style='"+col+"'>"+fmtSec(sp[i])+"</td>";
+      }
+      return r+"</tr>";
+    }
+    html+=rowFor(primary, ps);
+    sl.forEach(function(l){
+      if(l===primary) return;
+      var sp=splitsOf(l); if(!sp) return;
+      html+=rowFor(l, sp);
+    });
+    var tbl=document.createElement("table"); tbl.className="sectable";
+    tbl.innerHTML=html+"</tbody>";
+    body.appendChild(tbl);
   }
 
   // interpolate all channels of a lap at normalized position p (0..1)
@@ -510,20 +722,52 @@
   function at(d,i){ var o={}; ["thr","brk","spd","gear","str","x","z","t"].forEach(function(k){ o[k]=d[k][i]; }); return o; }
 
   // ---- hover ----------------------------------------------------------
+  function fmtVal(ch, v){
+    if(ch.key==="spd") return Math.round(v)+" km/h";
+    if(ch.key==="gear") return String(Math.round(v));
+    if(ch.key==="str") return v.toFixed(0)+"°";
+    return Math.round(v)+"%";   // thr / brk
+  }
+  function hideTooltip(){ document.getElementById("tt").style.display="none"; }
+  // floating tooltip near the pointer: distance + each shown lap's value of
+  // the hovered channel. Trace hover only — the map uses the AT CURSOR panel.
+  function updateTooltip(e, ch){
+    var tt=document.getElementById("tt"), sl=shownLaps();
+    if(cursor==null || !sl.length){ hideTooltip(); return; }
+    var len = primary && primary.data ? primary.data.track_len_m : 0;
+    var html="<div class='tth'>"+(len? Math.round(cursor*len)+" m" : Math.round(cursor*100)+"%")+"</div>";
+    sl.forEach(function(l){
+      var s=sampleAt(l.data, cursor); if(!s) return;
+      html+="<div class='ttr'><span class='swatch' style='background:"+l.color+"'></span>"+
+        esc(l.rec.user)+"<b>"+fmtVal(ch, s[ch.key])+"</b></div>";
+    });
+    tt.innerHTML=html; tt.style.display="block";
+    var px=(e.touches?e.touches[0].clientX:e.clientX);
+    var py=(e.touches?e.touches[0].clientY:e.clientY);
+    var tw=tt.offsetWidth, th=tt.offsetHeight;
+    var lx=px+14, ly=py+16;   // offset so it never sits under the pointer
+    if(lx+tw>window.innerWidth-8) lx=px-tw-14;
+    if(ly+th>window.innerHeight-8) ly=py-th-16;
+    if(lx<4) lx=4; if(ly<4) ly=4;
+    tt.style.left=lx+"px"; tt.style.top=ly+"px";
+  }
   function attachHover(){
-    function handle(e, cv){
+    function handle(e, cv, ch){
       var rect=cv.getBoundingClientRect();
       var cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
       var plotW=cv.clientWidth-PADL-PADR;
-      var p=(cx-PADL)/plotW;
-      cursor=Math.max(0,Math.min(1,p));
+      var dom=traceDomain();
+      var f=Math.max(0,Math.min(1,(cx-PADL)/plotW));
+      cursor=dom[0]+f*(dom[1]-dom[0]);   // map mouse x into the (possibly focused) domain
+      updateTooltip(e, ch);
       scheduleRender();
     }
     traceCanvases.forEach(function(t){
-      t.cv.addEventListener("mousemove",function(e){ handle(e,t.cv); });
-      t.cv.addEventListener("touchmove",function(e){ handle(e,t.cv); e.preventDefault(); }, {passive:false});
+      t.cv.addEventListener("mousemove",function(e){ handle(e,t.cv,t.ch); });
+      t.cv.addEventListener("touchmove",function(e){ handle(e,t.cv,t.ch); e.preventDefault(); }, {passive:false});
     });
-    document.getElementById("traces").addEventListener("mouseleave",function(){ cursor=null; scheduleRender(); });
+    document.getElementById("traces").addEventListener("mouseleave",function(){
+      cursor=null; hideTooltip(); scheduleRender(); });
   }
 })();
 </script>

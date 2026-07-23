@@ -64,12 +64,14 @@ def _read_json(path, default):
 class Store(object):
     """Reads/writes records.json and users.json in a data directory.
 
-    Only the best (lowest) time per (track, config, car, user) is kept, so the
-    files stay small and are exactly the leaderboard payload for GitHub Pages.
+    Each driver's MAX_PER_KEY fastest laps per (track, config, car, user) are
+    kept, so the files stay small and are exactly the leaderboard payload for
+    GitHub Pages.
     """
 
     RECORDS_FILE = "records.json"
     USERS_FILE = "users.json"
+    MAX_PER_KEY = 3
 
     def __init__(self, data_dir):
         self.data_dir = data_dir
@@ -142,27 +144,49 @@ class Store(object):
 
     # -- records ----------------------------------------------------------
     def find_record(self, track, config, car, user):
+        """The FASTEST stored record for this combo+user (or None)."""
+        recs = self.records_for(track, config, car, user)
+        return recs[0] if recs else None
+
+    def records_for(self, track, config, car, user):
+        """All stored records for this combo+user, fastest first."""
         key = (norm(track), norm(config), norm(car), norm(user))
-        for r in self.records:
-            if record_key(r) == key:
-                return r
-        return None
+        out = [r for r in self.records if record_key(r) == key]
+        out.sort(key=lambda r: r.get("time_ms", 1 << 62))
+        return out
 
     def upsert_record(self, rec):
-        """Insert or update a record, keeping only the best time per key.
+        """Insert a record, keeping each driver's MAX_PER_KEY fastest laps
+        per (track, config, car, user).
 
-        Returns "new" (first time for this combo/user), "improved" (beat the
-        previous best), or "ignored" (existing time was as good or better).
-        Also registers the user in the users list.
+        Returns a (result, dropped) tuple:
+          result:  "pb"      -- new personal best (including first ever lap)
+                   "top3"    -- entered the driver's top MAX_PER_KEY, not best
+                   "ignored" -- slower than (or equal to) their existing laps
+          dropped: the record that fell out of the top MAX_PER_KEY, or None.
+        A lap whose time EQUALS an already-stored lap is "ignored" (a new lap
+        never replaces an equal existing one). Also registers the user.
         """
         self._remember_user(rec.get("user"))
-        existing = self.find_record(rec.get("track"), rec.get("config"),
-                                    rec.get("car"), rec.get("user"))
         new_ms = rec.get("time_ms")
-        if existing is None:
-            self.records.append(rec)
-            return "new"
-        if new_ms is not None and new_ms < existing.get("time_ms", 1 << 62):
-            existing.update(rec)
-            return "improved"
-        return "ignored"
+        if new_ms is None:
+            return ("ignored", None)
+        existing = self.records_for(rec.get("track"), rec.get("config"),
+                                    rec.get("car"), rec.get("user"))
+        for r in existing:
+            if r.get("time_ms") == new_ms:
+                return ("ignored", None)
+        if len(existing) >= self.MAX_PER_KEY and \
+                new_ms > existing[self.MAX_PER_KEY - 1].get("time_ms", 1 << 62):
+            return ("ignored", None)
+
+        best = existing[0].get("time_ms", 1 << 62) if existing else None
+        self.records.append(rec)
+        dropped = None
+        kept = existing + [rec]
+        kept.sort(key=lambda r: r.get("time_ms", 1 << 62))
+        if len(kept) > self.MAX_PER_KEY:
+            dropped = kept[self.MAX_PER_KEY]
+            self.records.remove(dropped)
+        result = "pb" if (best is None or new_ms < best) else "top3"
+        return (result, dropped)

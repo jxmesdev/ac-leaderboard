@@ -128,6 +128,21 @@ def _consume_pick():
     return v
 
 
+def _valid_splits(splits, lap_ms):
+    """Sanity-check sector times against the lap: non-empty, all positive,
+    and summing to (about) the lap time. Returns the list or None."""
+    if not splits:
+        return None
+    total = 0
+    for s in splits:
+        if s <= 0:
+            return None
+        total += s
+    if abs(total - lap_ms) >= 2000:
+        return None
+    return splits
+
+
 class LeaderboardApp(object):
     def __init__(self):
         self.window = None
@@ -371,25 +386,53 @@ class LeaderboardApp(object):
         log("add_driver: done")
 
     # -- recording --------------------------------------------------------
-    def _record(self, user, ms):
+    def _record(self, user, ms, splits=None):
         track, cfg, car = self.track, self.track_config, self.car
         if not track or not car:
             return
         rec = storage.make_record(track, cfg, car, user, ms, "auto")
-        result = self.store.upsert_record(rec)
-        if result not in ("new", "improved"):
-            self._set_status("{0}: {1} not faster than current".format(user, format_ms(ms)))
+        if splits:
+            rec["splits"] = splits
+        result, dropped = self.store.upsert_record(rec)
+        if result == "ignored":
+            self._set_status("{0}: {1} not in your top 3".format(user, format_ms(ms)))
             return
-        extra = self._save_telemetry(track, cfg, car, user, ms, rec.get("date"))
+        # Both "pb" and "top3" laps keep their telemetry: every stored lap
+        # has its own file (the filename carries the lap time).
+        extra = self._save_telemetry(rec, splits)
+        dropped_tel = self._remove_dropped_telemetry(dropped)
+        if dropped_tel:
+            # git add of a deleted path stages the deletion.
+            extra = extra + [dropped_tel]
         self.store.save()
         self._refresh_board()
-        verb = "PB" if result == "improved" else "time"
-        self._set_status("{0} for {1}: {2}".format(verb, user, format_ms(ms)))
+        if result == "pb":
+            self._set_status("PB for {0}: {1}".format(user, format_ms(ms)))
+        else:
+            self._set_status("top-3 lap for {0}: {1}".format(user, format_ms(ms)))
         self._publish("{0} {1} {2} {3}".format(user, track, car, format_ms(ms)),
                       extra_paths=extra)
 
-    def _save_telemetry(self, track, cfg, car, user, ms, date):
-        """Write best-lap telemetry and link it to the stored record.
+    def _remove_dropped_telemetry(self, dropped):
+        """Delete the telemetry file of a record that fell out of the top 3.
+
+        Returns its absolute path (to stage the deletion in the push), or None.
+        """
+        if not dropped:
+            return None
+        rel = dropped.get("telemetry")
+        if not rel:
+            return None
+        path = os.path.join(self.cfg.data_dir, rel)
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+        except Exception:
+            log("dropped telemetry remove failed: " + path)
+        return path
+
+    def _save_telemetry(self, rec, splits=None):
+        """Write the just-stored lap's telemetry and link it to its record.
 
         Returns a list of extra file paths to include in the git push.
         """
@@ -398,10 +441,14 @@ class LeaderboardApp(object):
         lap = self.recorder.take_last_lap()
         if not lap:
             return []
+        track, cfg, car = rec["track"], rec["config"], rec["car"]
         extra = []
         try:
-            payload = telemetry.build_payload(lap, track, cfg, car, user, ms,
-                                              date, self.recorder.hz)
+            payload = telemetry.build_payload(lap, track, cfg, car,
+                                              rec["user"], rec["time_ms"],
+                                              rec.get("date"), self.recorder.hz)
+            if splits:
+                payload["splits"] = splits
             tm = self._grab_trackmap(track, cfg)
             if tm is not None:
                 payload["trackmap"] = tm[0]
@@ -420,9 +467,10 @@ class LeaderboardApp(object):
         except Exception:
             log("telemetry write failed:\n" + traceback.format_exc())
             return []
-        stored = self.store.find_record(track, cfg, car, user)
-        if stored is not None:
-            stored["telemetry"] = relpath
+        # `rec` is the dict the store keeps (upsert appends it as-is), so
+        # linking here updates the stored record directly -- never a lookup,
+        # which could hit one of the driver's OTHER laps now.
+        rec["telemetry"] = relpath
         return [os.path.join(self.cfg.data_dir, relpath)] + extra
 
     def _edges_state(self, track, cfg):
@@ -645,7 +693,8 @@ class LeaderboardApp(object):
             self._set_status("lap " + format_ms(ms) +
                              " invalid (cut) -- not saved", error=True)
             return
-        self._record(user, ms)
+        splits = _valid_splits(ac_data.get_last_splits(), ms)
+        self._record(user, ms, splits)
 
 
 # -- module-level AC entry points -----------------------------------------

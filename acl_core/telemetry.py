@@ -3,8 +3,9 @@
 # A LapRecorder is fed one sample per frame via tick(); it buffers the current
 # lap, detects the start/finish crossing from the normalized spline position,
 # and hands back the just-completed lap when asked. The in-game app flushes that
-# lap to a compact columnar JSON file only when the driver sets a new best, so
-# only best-lap telemetry is ever stored (mirroring the leaderboard).
+# lap to a compact columnar JSON file whenever the lap enters the driver's top
+# 3 for the combo, so each stored record has its own telemetry file
+# (mirroring the leaderboard).
 
 import io
 import json
@@ -26,8 +27,14 @@ def slug(s):
     return s.strip("_")
 
 
-def telemetry_filename(track, config, car, driver):
-    return "__".join([slug(track), slug(config), slug(car), slug(driver)]) + ".json"
+def telemetry_filename(track, config, car, driver, time_ms=None):
+    """Telemetry file name for a lap. time_ms (when given) is appended so a
+    driver's multiple stored laps each get their own file. Old files written
+    without the suffix are still referenced verbatim by their records."""
+    name = "__".join([slug(track), slug(config), slug(car), slug(driver)])
+    if time_ms is not None:
+        name += "__" + str(int(time_ms))
+    return name + ".json"
 
 
 class LapRecorder(object):
@@ -125,7 +132,8 @@ def build_payload(lap, track, config, car, driver, time_ms, date, hz):
 def write_telemetry(data_dir, payload):
     """Write a telemetry payload compactly; return its path relative to data_dir."""
     filename = telemetry_filename(payload.get("track"), payload.get("config"),
-                                  payload.get("car"), payload.get("driver"))
+                                  payload.get("car"), payload.get("driver"),
+                                  payload.get("time_ms"))
     tel_dir = os.path.join(data_dir, "telemetry")
     if not os.path.isdir(tel_dir):
         os.makedirs(tel_dir)

@@ -26,6 +26,18 @@ class SlugTests(unittest.TestCase):
             telemetry_filename("spa", "", "ferrari_488_gt3", "James"),
             "spa____ferrari_488_gt3__james.json")
 
+    def test_filename_time_suffix(self):
+        self.assertEqual(
+            telemetry_filename("spa", "", "ferrari_488_gt3", "James", 128456),
+            "spa____ferrari_488_gt3__james__128456.json")
+        self.assertEqual(
+            telemetry_filename("spa", "", "ferrari_488_gt3", "James", 128456.0),
+            "spa____ferrari_488_gt3__james__128456.json")
+        # No time -> legacy name (old records reference these verbatim).
+        self.assertEqual(
+            telemetry_filename("spa", "", "ferrari_488_gt3", "James", None),
+            "spa____ferrari_488_gt3__james.json")
+
 
 def _drive_lap(rec, seconds, fps=60.0, base_x=0.0):
     """Feed a synthetic lap: nsp 0->~1 with plausible channel values."""
@@ -97,7 +109,9 @@ class PayloadTests(unittest.TestCase):
         payload = telemetry.build_payload(lap, "spa", "", "ferrari_488_gt3",
                                           "James", 128456, "2026-07-22T00:00:00Z", 30)
         relpath = telemetry.write_telemetry(self.dir, payload)
-        self.assertEqual(relpath, "telemetry/spa____ferrari_488_gt3__james.json")
+        # write_telemetry always keys the file by the payload's time_ms.
+        self.assertEqual(relpath,
+                         "telemetry/spa____ferrari_488_gt3__james__128456.json")
         full = os.path.join(self.dir, relpath)
         self.assertTrue(os.path.isfile(full))
         loaded = json.load(open(full))

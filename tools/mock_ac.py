@@ -20,6 +20,7 @@ class _State(object):
         self.last_lap = 0
         self.lap_count = 0
         self.lap_invalidated = 0
+        self.splits = []          # last lap's sector times (ms)
         self.logs = []
         # live telemetry channels
         self.gas = 0.0
@@ -121,6 +122,10 @@ def getCarName(car_id):
 
 def getDriverName(car_id):
     return STATE.driver_name
+
+
+def getLastSplits(car_id):
+    return list(STATE.splits)
 
 
 def getCarState(car_id, which, *rest):

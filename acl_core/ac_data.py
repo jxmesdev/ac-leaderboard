@@ -143,6 +143,20 @@ def get_last_lap_ms():
     return _car_state_int(acsys.CS.LastLap)
 
 
+def get_last_splits():
+    """Sector times (ms) of the most recently completed lap, as a list of
+    ints. [] when unavailable (no lap yet, API missing, or bad values)."""
+    if not _HAVE_AC:
+        return []
+    try:
+        splits = ac.getLastSplits(PLAYER)
+        if not splits:
+            return []
+        return [int(s) for s in splits]
+    except Exception:
+        return []
+
+
 def get_lap_count():
     """Completed-lap count for the session (0 at the start)."""
     if not _HAVE_AC:

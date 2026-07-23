@@ -13,7 +13,7 @@ import unittest
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, APP_DIR)
 
-from acl_core import config, storage
+from acl_core import config, storage, telemetry
 from acl_core.timefmt import format_ms, parse_time
 from acl_core.leaderboard import leaderboard_for
 
@@ -57,31 +57,80 @@ class StorageTests(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.dir, ignore_errors=True)
 
-    def test_upsert_and_persist(self):
+    def _rec(self, ms, user="James"):
+        return storage.make_record("spa", "", "ferrari_488_gt3", user, ms)
+
+    def test_upsert_top3_and_persist(self):
         st = storage.Store(self.dir).load()
-        r1 = storage.make_record("spa", "", "ferrari_488_gt3", "James", 130000)
-        self.assertEqual(st.upsert_record(r1), "new")
-        # Slower time is ignored.
-        r2 = storage.make_record("spa", "", "ferrari_488_gt3", "James", 131000)
-        self.assertEqual(st.upsert_record(r2), "ignored")
-        # Faster time improves.
-        r3 = storage.make_record("spa", "", "ferrari_488_gt3", "James", 128500)
-        self.assertEqual(st.upsert_record(r3), "improved")
-        self.assertEqual(len(st.records), 1)
-        self.assertEqual(st.records[0]["time_ms"], 128500)
+        # First ever lap is a PB.
+        self.assertEqual(st.upsert_record(self._rec(130000)), ("pb", None))
+        # A slower lap still enters the top 3.
+        self.assertEqual(st.upsert_record(self._rec(131000)), ("top3", None))
+        # A faster lap is a new PB.
+        self.assertEqual(st.upsert_record(self._rec(128500)), ("pb", None))
+        self.assertEqual(len(st.records), 3)
+
+        # 4th lap slower than all three -> ignored, nothing dropped.
+        self.assertEqual(st.upsert_record(self._rec(140000)), ("ignored", None))
+        self.assertEqual(len(st.records), 3)
+
+        # 4th lap between #2 and #3 -> top3, the old #3 falls out.
+        result, dropped = st.upsert_record(self._rec(130500))
+        self.assertEqual(result, "top3")
+        self.assertEqual(dropped["time_ms"], 131000)
+        self.assertEqual(len(st.records), 3)
+
+        # New overall best while full -> pb, the slowest falls out.
+        result, dropped = st.upsert_record(self._rec(128000))
+        self.assertEqual(result, "pb")
+        self.assertEqual(dropped["time_ms"], 130500)
+        times = sorted(r["time_ms"] for r in st.records)
+        self.assertEqual(times, [128000, 128500, 130000])
 
         st.save()
         st2 = storage.Store(self.dir).load()
-        self.assertEqual(len(st2.records), 1)
-        self.assertEqual(st2.records[0]["time_ms"], 128500)
+        self.assertEqual(sorted(r["time_ms"] for r in st2.records),
+                         [128000, 128500, 130000])
+
+    def test_upsert_equal_time_ignored(self):
+        st = storage.Store(self.dir).load()
+        st.upsert_record(self._rec(130000))
+        st.upsert_record(self._rec(131000))
+        # A lap equal to an existing one NEVER replaces it.
+        self.assertEqual(st.upsert_record(self._rec(130000)), ("ignored", None))
+        self.assertEqual(st.upsert_record(self._rec(131000)), ("ignored", None))
+        self.assertEqual(len(st.records), 2)
+
+    def test_upsert_per_user_isolation(self):
+        st = storage.Store(self.dir).load()
+        st.upsert_record(self._rec(130000, "James"))
+        st.upsert_record(self._rec(131000, "James"))
+        st.upsert_record(self._rec(132000, "James"))
+        # Another driver's laps live in their own top 3.
+        self.assertEqual(st.upsert_record(self._rec(135000, "Alex")),
+                         ("pb", None))
+        self.assertEqual(len(st.records), 4)
+        self.assertEqual(len(st.records_for("spa", "", "ferrari_488_gt3",
+                                            "James")), 3)
+
+    def test_find_record_returns_fastest(self):
+        st = storage.Store(self.dir).load()
+        st.upsert_record(self._rec(131000))
+        st.upsert_record(self._rec(129000))
+        st.upsert_record(self._rec(130000))
+        best = st.find_record("spa", "", "ferrari_488_gt3", "James")
+        self.assertEqual(best["time_ms"], 129000)
 
     def test_case_insensitive_combo(self):
         st = storage.Store(self.dir).load()
         st.upsert_record(storage.make_record("Spa", "", "Ferrari_488_GT3", "James", 130000))
-        # Same combo, different case -> updates the same record.
-        res = st.upsert_record(storage.make_record("spa", "", "ferrari_488_gt3", "james", 129000))
-        self.assertEqual(res, "improved")
-        self.assertEqual(len(st.records), 1)
+        # Same combo, different case -> same driver top-3 bucket.
+        res, dropped = st.upsert_record(storage.make_record("spa", "", "ferrari_488_gt3", "james", 129000))
+        self.assertEqual(res, "pb")
+        self.assertIsNone(dropped)
+        self.assertEqual(len(st.records), 2)
+        self.assertEqual(len(st.records_for("SPA", "", "ferrari_488_GT3",
+                                            "JAMES")), 2)
 
     def test_users_union_and_create(self):
         st = storage.Store(self.dir).load()
@@ -119,6 +168,20 @@ class LeaderboardTests(unittest.TestCase):
         rows = leaderboard_for(self._records(), "spa", "", "bmw_m3_e30")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["user"], "James")
+
+
+class TelemetryFilenameTests(unittest.TestCase):
+    def test_time_suffix(self):
+        # Each stored lap gets its own file, keyed by lap time.
+        self.assertEqual(
+            telemetry.telemetry_filename("spa", "", "ferrari_488_gt3",
+                                         "James", 81200),
+            "spa____ferrari_488_gt3__james__81200.json")
+        # Without a time the legacy (pre-suffix) name is unchanged.
+        self.assertEqual(
+            telemetry.telemetry_filename("spa", "", "ferrari_488_gt3",
+                                         "James"),
+            "spa____ferrari_488_gt3__james.json")
 
 
 class ConfigTests(unittest.TestCase):

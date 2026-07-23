@@ -34,12 +34,17 @@ os.environ["ACL_CONFIG"] = cfg_path
 import ac_leaderboard as app
 
 
-def dump(title):
+def records():
     recs = os.path.join(repo, "docs", "data", "records.json")
-    data = json.load(open(recs)) if os.path.exists(recs) else []
+    return json.load(open(recs)) if os.path.exists(recs) else []
+
+
+def dump(title):
+    data = records()
     print("--", title, "-> records:", len(data))
     for r in data:
-        print("   ", r["user"], r["track"], r["car"], r["time_ms"], r["source"])
+        print("   ", r["user"], r["track"], r["car"], r["time_ms"],
+              r["source"], "splits=" + str(r.get("splits")))
 
 
 def driver_button_texts():
@@ -115,24 +120,70 @@ drive_lap(5.0)
 # ...cross start/finish so the recorder finalizes the lap...
 mock_ac.STATE.nsp = 0.0
 app.acUpdate(1 / 60.0)
-# ...then AC's lap counter ticks over with the completed lap's time ->
-# save record + flush telemetry (judged against James's OWN record).
+# ...then AC's lap counter ticks over with the completed lap's time and its
+# sector splits -> save record + flush telemetry (judged against James's OWN
+# record). Splits must sum to (about) the lap time to be accepted.
 mock_ac.STATE.lap_count += 1
 mock_ac.STATE.last_lap = 81200
+mock_ac.STATE.splits = [27000, 27100, 27100]     # sums to 81200
 for _ in range(40):
     app.acUpdate(1 / 60.0)
 dump("after driven PB 1:21.200")
+# (the async git worker may have already overwritten the status with "git: ...")
+assert app._app.status_text == "PB for James: 1:21.200" or \
+    app._app.status_text.startswith("git:"), app._app.status_text
 
+# Each stored lap now has its OWN telemetry file, keyed by lap time.
 tel_path = os.path.join(repo, "docs", "data", "telemetry",
-                        "spa____ferrari_488_gt3__james.json")
+                        "spa____ferrari_488_gt3__james__81200.json")
 print("telemetry file written:", os.path.isfile(tel_path))
-if os.path.isfile(tel_path):
-    tel = json.load(open(tel_path))
-    print("  samples:", tel["n"], "| channels:",
-          [k for k in ("nsp", "thr", "brk", "spd", "gear", "str", "x", "z") if k in tel],
-          "| len(m):", tel["track_len_m"])
-rec = json.load(open(os.path.join(repo, "docs", "data", "records.json")))[0]
+assert os.path.isfile(tel_path), "per-lap telemetry file missing"
+tel = json.load(open(tel_path))
+print("  samples:", tel["n"], "| channels:",
+      [k for k in ("nsp", "thr", "brk", "spd", "gear", "str", "x", "z") if k in tel],
+      "| len(m):", tel["track_len_m"], "| splits:", tel.get("splits"))
+# Splits round-trip into BOTH the record and the telemetry payload.
+assert tel.get("splits") == [27000, 27100, 27100], tel.get("splits")
+
+
+def james_spa_records():
+    """The smoke's own records (the clone may carry pre-existing live data)."""
+    return [r for r in records()
+            if r["user"] == "James" and r["track"] == "spa"]
+
+
+rec = james_spa_records()[0]
 print("record telemetry link:", rec.get("telemetry"))
+assert rec.get("splits") == [27000, 27100, 27100], rec.get("splits")
+assert rec.get("telemetry") == \
+    "telemetry/spa____ferrari_488_gt3__james__81200.json", rec.get("telemetry")
+
+# A SECOND, slower lap for the same driver -> a second record (top3) with its
+# own telemetry file (up to each driver's 3 fastest laps are kept).
+drive_lap(5.0)
+mock_ac.STATE.nsp = 0.0
+app.acUpdate(1 / 60.0)
+mock_ac.STATE.lap_count += 1
+mock_ac.STATE.last_lap = 82500
+mock_ac.STATE.splits = [27500, 27400, 27600]     # sums to 82500
+for _ in range(40):
+    app.acUpdate(1 / 60.0)
+dump("after slower lap 1:22.500 (top-3)")
+assert app._app.status_text == "top-3 lap for James: 1:22.500" or \
+    app._app.status_text.startswith("git:"), app._app.status_text
+
+james_recs = james_spa_records()
+assert len(james_recs) == 2, "expected 2 James records, got %d" % len(james_recs)
+assert sorted(r["time_ms"] for r in james_recs) == [81200, 82500]
+tel_path2 = os.path.join(repo, "docs", "data", "telemetry",
+                         "spa____ferrari_488_gt3__james__82500.json")
+assert os.path.isfile(tel_path2), "second lap's telemetry file missing"
+by_ms = dict((r["time_ms"], r) for r in james_recs)
+assert by_ms[82500].get("telemetry") == \
+    "telemetry/spa____ferrari_488_gt3__james__82500.json"
+assert by_ms[82500].get("splits") == [27500, 27400, 27600]
+assert json.load(open(tel_path2)).get("splits") == [27500, 27400, 27600]
+print("second (top-3) lap stored with its own telemetry + splits")
 
 # Let the background git worker finish.
 time.sleep(3)
