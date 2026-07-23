@@ -11,9 +11,11 @@
 # the viewer must draw the image at its natural pixel size.
 
 import io
+import json
 import os
 import shutil
 
+from acl_core import ailine
 from acl_core.telemetry import slug
 
 
@@ -100,4 +102,47 @@ def grab(ac_root, track, config, data_dir):
         if params.get("height"):
             tm["h"] = params["height"]
         return tm, dst
+    return None
+
+
+def _ai_candidates(ac_root, track, config):
+    base = os.path.join(ac_root, "content", "tracks", track)
+    out = []
+    if config:
+        out.append(os.path.join(base, config, "ai", "fast_lane.ai"))
+    out.append(os.path.join(base, "ai", "fast_lane.ai"))
+    return out
+
+
+def grab_edges(ac_root, track, config, data_dir):
+    """Build the TRUE track boundary from the track's ai/fast_lane.ai.
+
+    Writes trackmaps/<slug>__edges.json into data_dir and returns
+    (rel_url, written_path), or None if the spline is missing/unusable.
+    Edge coordinates are world metres -- the same space as recorded laps --
+    so the viewer can draw an exactly-aligned surface (unlike map.png, whose
+    ribbon is stylized at ~60% of real width with imperfect offsets).
+    """
+    if not ac_root:
+        return None
+    for ai_path in _ai_candidates(ac_root, track, config):
+        if not os.path.isfile(ai_path):
+            continue
+        ai = ailine.parse_fast_lane(ai_path)
+        if ai is None:
+            continue
+        edges = ailine.build_edges(ai)
+        if edges is None:
+            continue
+        name = slug(track) + "__" + slug(config) + "__edges.json"
+        dst_dir = os.path.join(data_dir, "trackmaps")
+        if not os.path.isdir(dst_dir):
+            os.makedirs(dst_dir)
+        dst = os.path.join(dst_dir, name)
+        try:
+            with io.open(dst, "w", encoding="utf-8") as f:
+                f.write(json.dumps(edges, separators=(",", ":")))
+        except (IOError, OSError):
+            return None
+        return "trackmaps/" + name, dst
     return None

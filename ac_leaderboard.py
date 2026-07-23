@@ -405,6 +405,10 @@ class LeaderboardApp(object):
             if tm is not None:
                 payload["trackmap"] = tm[0]
                 extra.append(tm[1])
+            eg = self._grab_edges(track, cfg)
+            if eg is not None:
+                payload["edges_url"] = eg[0]
+                extra.append(eg[1])
             relpath = telemetry.write_telemetry(self.cfg.data_dir, payload)
         except Exception:
             log("telemetry write failed:\n" + traceback.format_exc())
@@ -413,6 +417,15 @@ class LeaderboardApp(object):
         if stored is not None:
             stored["telemetry"] = relpath
         return [os.path.join(self.cfg.data_dir, relpath)] + extra
+
+    def _grab_edges(self, track, cfg):
+        """Best-effort TRUE track boundary from the track's ai/fast_lane.ai."""
+        try:
+            ac_root = self.cfg.get("ac_root") or trackmap.find_ac_root(APP_DIR)
+            return trackmap.grab_edges(ac_root, track, cfg, self.cfg.data_dir)
+        except Exception:
+            log("edges grab failed:\n" + traceback.format_exc())
+            return None
 
     def _grab_trackmap(self, track, cfg):
         """Best-effort copy of the AC track's map.png for the web viewer."""

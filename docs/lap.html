@@ -158,8 +158,16 @@
     l.shown = on;
     if(on && !l.data && !l.loading){
       l.loading = true;
-      getJSON("data/"+l.rec.telemetry).then(function(d){ l.data=d; l.loading=false; scheduleRender(); })
-        .catch(function(){ l.loading=false; l.shown=false; });
+      getJSON("data/"+l.rec.telemetry).then(function(d){
+        l.data=d; l.loading=false;
+        // True track boundary (world metres, from ai/fast_lane.ai) is stored
+        // beside the trackmap and referenced by URL; attach it once loaded.
+        if(d.edges_url && !d.edges){
+          getJSON("data/"+d.edges_url).then(function(eg){ d.edges=eg; scheduleRender(); })
+            .catch(function(){});
+        }
+        scheduleRender();
+      }).catch(function(){ l.loading=false; l.shown=false; });
     } else {
       scheduleRender();
     }
@@ -365,10 +373,11 @@
     if(!sl.length && !e && !tm){ return; }
 
     // "map space": real map.png pixels when we have a track map, else world
-    // metres. AC's map.ini transform is (world + OFFSET) / SCALE_FACTOR, plus
-    // the per-track auto-registration nudge (see mapRegistration). The image
-    // itself is drawn unshifted; only line-derived geometry moves.
-    var reg = tm ? mapRegistration(tm, primary && primary.data) : {dx:0, dy:0};
+    // metres. AC's map.ini transform is (world + OFFSET) / SCALE_FACTOR.
+    // True edges (from ai/fast_lane.ai) are WORLD coordinates like the laps,
+    // so line-vs-edges alignment is exact under ANY shared transform; the
+    // mapRegistration nudge exists only for the image-background fallback.
+    var reg = (tm && !e) ? mapRegistration(tm, primary && primary.data) : {dx:0, dy:0};
     var toMap = tm
       ? function(x,z){ return [(x+tm.xoff)/tm.scale + reg.dx, (z+tm.zoff)/tm.scale + reg.dy]; }
       : function(x,z){ return [x,z]; };
@@ -378,7 +387,7 @@
     var minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
     function acc(mx,my){ if(mx<minX)minX=mx; if(mx>maxX)maxX=mx; if(my<minY)minY=my; if(my>maxY)maxY=my; }
     sl.forEach(function(l){ var X=l.data.x,Z=l.data.z; for(var i=0;i<X.length;i++){ var m=toMap(X[i],Z[i]); acc(m[0],m[1]); } });
-    if(!isFinite(minX) && e){ for(var k=0;k<e.lx.length;k++){ acc(e.lx[k],e.lz[k]); acc(e.rx[k],e.rz[k]); } }
+    if(!isFinite(minX) && e){ for(var k=0;k<e.lx.length;k++){ var ml=toMap(e.lx[k],e.lz[k]), mr=toMap(e.rx[k],e.rz[k]); acc(ml[0],ml[1]); acc(mr[0],mr[1]); } }
     if(!isFinite(minX)){ minX=0;maxX=1;minY=0;maxY=1; }
 
     var pad=18, spanX=(maxX-minX)||1, spanY=(maxY-minY)||1;
@@ -391,8 +400,21 @@
     }
     function P(x,z){ var m=toMap(x,z); return S(m[0],m[1]); }
 
-    // background: real track map image, else the synthesised edges ribbon
-    if(tm){
+    // Background priority: TRUE edges (from ai/fast_lane.ai, world coords --
+    // exact width and exact alignment with the laps by construction), else
+    // the map.png image (stylized: ribbon ~60% of real width, offsets can be
+    // a couple px off -- hence mapRegistration in that mode only).
+    if(e){
+      ctx.beginPath();
+      for(var i=0;i<e.lx.length;i++){ var p=P(e.lx[i],e.lz[i]); if(i===0)ctx.moveTo(p[0],p[1]); else ctx.lineTo(p[0],p[1]); }
+      for(var j=e.rx.length-1;j>=0;j--){ var q=P(e.rx[j],e.rz[j]); ctx.lineTo(q[0],q[1]); }
+      ctx.closePath();
+      ctx.fillStyle=css("--muted"); ctx.globalAlpha=0.34; ctx.fill();
+      ctx.globalAlpha=0.85; ctx.lineWidth=1.2; ctx.strokeStyle=css("--muted"); ctx.stroke(); ctx.globalAlpha=1;
+      var s0=P(e.lx[0],e.lz[0]), s1=P(e.rx[0],e.rz[0]);
+      ctx.strokeStyle=css("--text"); ctx.globalAlpha=0.7; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(s0[0],s0[1]); ctx.lineTo(s1[0],s1[1]); ctx.stroke(); ctx.globalAlpha=1;
+    } else if(tm){
       ensureTrackImg(tm.url);
       if(trackImg && trackImg.complete && trackImg.naturalWidth){
         // Draw at the PNG's NATURAL pixel size: map.ini pixel space IS the
@@ -403,16 +425,6 @@
         var a=S(0,0), b=S(iw,ih);
         ctx.globalAlpha=0.9; ctx.drawImage(trackImg, a[0],a[1], b[0]-a[0], b[1]-a[1]); ctx.globalAlpha=1;
       }
-    } else if(e){
-      ctx.beginPath();
-      for(var i=0;i<e.lx.length;i++){ var p=P(e.lx[i],e.lz[i]); if(i===0)ctx.moveTo(p[0],p[1]); else ctx.lineTo(p[0],p[1]); }
-      for(var j=e.rx.length-1;j>=0;j--){ var q=P(e.rx[j],e.rz[j]); ctx.lineTo(q[0],q[1]); }
-      ctx.closePath();
-      ctx.fillStyle=css("--muted"); ctx.globalAlpha=0.34; ctx.fill();
-      ctx.globalAlpha=0.85; ctx.lineWidth=1.2; ctx.strokeStyle=css("--muted"); ctx.stroke(); ctx.globalAlpha=1;
-      var s0=P(e.lx[0],e.lz[0]), s1=P(e.rx[0],e.rz[0]);
-      ctx.strokeStyle=css("--text"); ctx.globalAlpha=0.7; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.moveTo(s0[0],s0[1]); ctx.lineTo(s1[0],s1[1]); ctx.stroke(); ctx.globalAlpha=1;
     }
 
     // driven racing lines — kept thin so track usage is visible
