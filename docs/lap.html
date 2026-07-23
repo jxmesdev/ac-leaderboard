@@ -19,7 +19,7 @@
   .wrap { max-width:1100px; margin:0 auto; padding:18px 16px 60px; }
   a { color:var(--accent); text-decoration:none; }
   a:hover { text-decoration:underline; }
-  a.brand { display:block; color:var(--text); margin-bottom:16px; }
+  a.brand { display:block; color:var(--text); margin-bottom:30px; }
   a.brand:hover { text-decoration:none; }
   .brand h1 { font-size:26px; margin:0 0 4px; letter-spacing:.3px; }
   .brand p { margin:0; color:var(--muted); font-size:13px; }
@@ -100,10 +100,12 @@
       <div class="card">
         <h2>Laps — click to overlay</h2>
         <div class="laps" id="laps"></div>
-        <h2>At cursor <span id="cursorpos" style="text-transform:none;letter-spacing:0;color:var(--muted)"></span></h2>
-        <div class="readout"><table id="readout"></table></div>
-        <div class="hint">Hover the traces or map to inspect. Δ = time gap to the primary lap at that point.</div>
       </div>
+    </div>
+    <div class="card sectors">
+      <h2>At cursor <span id="cursorpos" style="text-transform:none;letter-spacing:0;color:var(--muted)"></span></h2>
+      <div class="readout"><table id="readout"></table></div>
+      <div class="hint">Hover the traces or map to inspect. Δ = time gap to the primary lap at that point.</div>
     </div>
     <div class="card sectors" id="sectors" style="display:none">
       <h2>Sectors</h2>
@@ -574,7 +576,7 @@
       if(dragging) return;
       if(!mapP || !(primary && primary.data)) return;
       var r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
-      var d=primary.data, X=d.x, Z=d.z, best=-1, bd=25*25;
+      var d=primary.data, X=d.x, Z=d.z, best=-1, bd=Infinity;   // nearest point, no radius cap
       for(var i=0;i<X.length;i++){
         var p=mapP(X[i],Z[i]);
         var dx=p[0]-mx, dy=p[1]-my, q=dx*dx+dy*dy;
