@@ -37,7 +37,7 @@
   #title { font:italic 600 20px "Chakra Petch", sans-serif; text-transform:uppercase;
     letter-spacing:.4px; margin-bottom:8px; }
   .sub { color:var(--muted); font-size:13px; }
-  .grid { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; margin-top:16px; }
+  .grid { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; margin-top:20px; }
   @media (max-width:820px){ .grid { grid-template-columns:1fr; } }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:0; }
   .card h2 { font:600 11px "Chakra Petch", sans-serif; text-transform:uppercase; letter-spacing:1.2px;
@@ -83,12 +83,25 @@
   .secbtns button:hover { border-color:var(--muted); }
   .secbtns button.on { background:var(--accent); border-color:var(--accent); color:#0a0a0b; }
   .sectable { border-collapse:collapse; font-size:12px; }
-  .sectable th, .sectable td { text-align:right; padding:3px 0 3px 22px;
+  .sectable th, .sectable td { text-align:right; padding:3px 0 3px 38px;
     font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; }
   .sectable th:first-child, .sectable td:first-child { text-align:left; padding-left:0;
     font-family:"Titillium Web",-apple-system,sans-serif; }
   .sectable thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
+  .setuptable { border-collapse:collapse; font-size:12px; }
+  .setuptable th, .setuptable td { text-align:right; padding:3px 0 3px 34px;
+    font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; }
+  .setuptable th:first-child, .setuptable td:first-child { text-align:left; padding-left:0;
+    font-family:"Titillium Web",-apple-system,sans-serif; color:var(--muted); }
+  .setuptable thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
+    text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
+  .setuptable td.diff { color:var(--accent); }
+  .setupdl { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .setupdl button { background:var(--panel2); color:var(--text); border:1px solid var(--line);
+    padding:3px 10px; font:600 11px "Chakra Petch",sans-serif; text-transform:uppercase;
+    letter-spacing:.6px; cursor:pointer; }
+  .setupdl button:hover { border-color:var(--accent); color:var(--accent); }
   footer { margin-top:64px; color:var(--muted); font-size:11px; text-align:center;
     font-family:"Chakra Petch",sans-serif; text-transform:uppercase; letter-spacing:1.2px; }
   footer .fbrand { color:var(--accent); }
@@ -136,6 +149,10 @@
       <div class="secbody" id="secbody"></div>
     </div>
     <div class="card traces" id="traces"></div>
+    <div class="card sectors" id="setups" style="display:none">
+      <h2>Setups</h2>
+      <div class="secbody" id="setupbody"></div>
+    </div>
   </div>
 
   <div id="error" class="empty" style="display:none"></div>
@@ -363,6 +380,7 @@
     traceCanvases.forEach(function(t){ drawTrace(t.cv, t.ch, sl); });
     drawReadout(sl);
     renderSectors(sl);
+    renderSetups(sl);
   }
 
   function setupCanvas(cv, cssH){
@@ -839,6 +857,127 @@
     if(!focus && !camCustom) all.className="on";
     all.addEventListener("click", focusAll);
     el.appendChild(all);
+  }
+
+  // ---- setups ---------------------------------------------------------
+  // A lap's payload may carry {setup:{name, ini, folder, src}} -- the most
+  // recently SAVED setup for the car/track when the lap was stored (the AC
+  // API cannot reveal which setup was actually loaded, so it is labelled).
+  function parseSetupIni(txt){
+    var out={}, sec=null;
+    String(txt).split(/\r?\n/).forEach(function(line){
+      line=line.trim();
+      var m=line.match(/^\[(.+)\]$/);
+      if(m){ sec=m[1]; return; }
+      m=line.match(/^VALUE\s*=\s*(.*)$/i);
+      if(m && sec){ out[sec]=m[1]; }
+    });
+    return out;
+  }
+
+  function dlBlob(name, text){
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([text], {type:"text/plain"}));
+    a.download=name; a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 5000);
+  }
+
+  // File System Access: pick Documents/Assetto Corsa/setups ONCE, then one
+  // click writes straight into <car>/<track folder>/. Chromium only.
+  function idb(){ return new Promise(function(res, rej){
+    var r=indexedDB.open("acl", 1);
+    r.onupgradeneeded=function(){ r.result.createObjectStore("kv"); };
+    r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); };
+  }); }
+  function idbGet(k){ return idb().then(function(db){ return new Promise(function(res){
+    var t=db.transaction("kv").objectStore("kv").get(k);
+    t.onsuccess=function(){ res(t.result); }; t.onerror=function(){ res(null); };
+  }); }); }
+  function idbSet(k, v){ return idb().then(function(db){ return new Promise(function(res){
+    var t=db.transaction("kv", "readwrite").objectStore("kv").put(v, k);
+    t.onsuccess=function(){ res(); }; t.onerror=function(){ res(); };
+  }); }); }
+
+  function saveToSetupsFolder(l){
+    var su=l.data.setup;
+    idbGet("setupsdir").then(function(dir){
+      var p = dir ? Promise.resolve(dir) : window.showDirectoryPicker({id:"acsetups"})
+        .then(function(d){ return idbSet("setupsdir", d).then(function(){ return d; }); });
+      return p;
+    }).then(function(dir){
+      return dir.requestPermission({mode:"readwrite"}).then(function(perm){
+        if(perm!=="granted") throw new Error("permission denied");
+        return dir.getDirectoryHandle(l.data.car, {create:true});
+      }).then(function(carDir){
+        return carDir.getDirectoryHandle(su.folder || l.data.track, {create:true});
+      }).then(function(trDir){
+        return trDir.getFileHandle(su.name, {create:true});
+      }).then(function(fh){ return fh.createWritable(); })
+      .then(function(w){ return w.write(su.ini).then(function(){ return w.close(); }); })
+      .then(function(){ alert("Saved to setups/"+l.data.car+"/"+(su.folder||l.data.track)+"/"+su.name); });
+    }).catch(function(err){
+      if(err && err.name==="AbortError") return;
+      alert("Could not save to the setups folder ("+err+") — using a normal download instead.");
+      dlBlob(su.name, su.ini);
+    });
+  }
+
+  var setupSig="";
+  function renderSetups(sl){
+    var card=document.getElementById("setups"), body=document.getElementById("setupbody");
+    var withSetup=sl.filter(function(l){ return l.data && l.data.setup && l.data.setup.ini; });
+    var sig=withSetup.map(function(l){ return l.rec.telemetry; }).join(";");
+    if(sig===setupSig) return;
+    setupSig=sig;
+    if(!withSetup.length){ card.style.display="none"; return; }
+    card.style.display="";
+    body.innerHTML="";
+    // downloads
+    var bar=document.createElement("div"); bar.className="setupdl";
+    withSetup.forEach(function(l){
+      var b=document.createElement("button");
+      b.textContent="⭳ "+(l.trophy? l.trophy+" ":"")+l.rec.user+" — "+l.data.setup.name;
+      b.title="Download this lap's setup";
+      b.addEventListener("click", function(){ dlBlob(l.data.setup.name, l.data.setup.ini); });
+      bar.appendChild(b);
+    });
+    if(window.showDirectoryPicker){
+      withSetup.forEach(function(l){
+        var b=document.createElement("button");
+        b.textContent="→ AC folder: "+l.data.setup.name;
+        b.title="Write straight into your Assetto Corsa setups folder (pick it once)";
+        b.addEventListener("click", function(){ saveToSetupsFolder(l); });
+        bar.appendChild(b);
+      });
+    }
+    body.appendChild(bar);
+    // comparison table
+    var parsed=withSetup.map(function(l){ return parseSetupIni(l.data.setup.ini); });
+    var keys={};
+    parsed.forEach(function(p){ Object.keys(p).forEach(function(k){ keys[k]=1; }); });
+    var klist=Object.keys(keys).sort();
+    var html="<thead><tr><th>Setting</th>";
+    withSetup.forEach(function(l){
+      html+="<th><span class='swatch' style='display:inline-block;background:"+l.color+
+        "'></span> "+(l.trophy? l.trophy+" ":"")+esc(l.rec.user)+"</th>";
+    });
+    html+="</tr></thead><tbody>";
+    klist.forEach(function(k){
+      var vals=parsed.map(function(p){ return p[k]; });
+      var differ=vals.some(function(v){ return v!==vals[0]; });
+      html+="<tr><td>"+esc(k)+"</td>";
+      vals.forEach(function(v){
+        html+="<td class='"+(differ?"diff":"")+"'>"+(v==null?"—":esc(v))+"</td>";
+      });
+      html+="</tr>";
+    });
+    var tbl=document.createElement("table"); tbl.className="setuptable";
+    tbl.innerHTML=html+"</tbody>";
+    body.appendChild(tbl);
+    var note=document.createElement("div"); note.className="secmuted";
+    note.style.marginTop="8px";
+    note.textContent="Setup = the most recently saved setup for this car/track when the lap was recorded.";
+    body.appendChild(note);
   }
 
   function renderSectors(sl){

@@ -20,7 +20,7 @@ if APP_DIR not in sys.path:
 
 import ac  # provided by Assetto Corsa
 
-from acl_core import ac_data, ailine, config, storage, telemetry, trackmap
+from acl_core import ac_data, ailine, config, setups, storage, telemetry, trackmap
 from acl_core.git_sync import GitSync
 from acl_core.leaderboard import leaderboard_for
 from acl_core.timefmt import format_ms
@@ -463,6 +463,11 @@ class LeaderboardApp(object):
                 if eg is not None:
                     payload["edges_url"] = eg[0]
                     extra.append(eg[1])
+            su = self._grab_setup(car, track)
+            if su is not None:
+                payload["setup"] = {"name": su["name"], "ini": su["ini"],
+                                    "folder": su["folder"],
+                                    "src": "latest_saved"}
             relpath = telemetry.write_telemetry(self.cfg.data_dir, payload)
         except Exception:
             log("telemetry write failed:\n" + traceback.format_exc())
@@ -525,6 +530,16 @@ class LeaderboardApp(object):
                 paths.append(sg[1])
         if paths and self.cfg.get("auto_push"):
             self.git.request_push(paths, "Track data " + self.track)
+
+    def _grab_setup(self, car, track):
+        """Most recently saved setup for this car/track ('latest_saved' --
+        the AC API cannot reveal which setup was actually loaded)."""
+        try:
+            sdir = self.cfg.get("setups_dir") or setups.default_setups_dir()
+            return setups.find_latest_setup(sdir, car, track)
+        except Exception:
+            log("setup grab failed:\n" + traceback.format_exc())
+            return None
 
     def _grab_edges(self, track, cfg):
         """Best-effort TRUE track boundary from the track's ai/fast_lane.ai."""
