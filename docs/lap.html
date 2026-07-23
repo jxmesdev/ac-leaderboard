@@ -112,6 +112,9 @@
   function fmtTime(ms){ if(ms==null) return "—"; var m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),mm=ms%1000;
     return m+":"+String(s).padStart(2,"0")+"."+String(mm).padStart(3,"0"); }
   function norm(s){ return (s==null?"":String(s)).trim().toLowerCase(); }
+  // Mirrors acl_core.telemetry.slug: lowercase, non-alphanumerics -> "_".
+  function slugjs(s){ return norm(s).replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,""); }
+  var globalEdges=null;   // per-track true boundary, fetched by convention
   function comboMatch(r){ return norm(r.track)===want.track && norm(r.config||"")===want.config && norm(r.car)===want.car; }
   function getJSON(u){ return fetch(u,{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error(u+" "+r.status); return r.json(); }); }
   function fail(msg){ document.getElementById("subtitle").textContent="";
@@ -134,6 +137,12 @@
     buildTraceCanvases();
     renderLapList();
     document.getElementById("content").style.display="block";
+    // True track boundary is published per-track (trackmaps/<slug>__edges.json)
+    // -- fetch by naming convention so EXISTING laps get accurate edges too.
+    getJSON("data/trackmaps/"+slugjs(primary.rec.track)+"__"+
+            slugjs(primary.rec.config)+"__edges.json")
+      .then(function(eg){ globalEdges=eg; scheduleRender(); })
+      .catch(function(){});
     // show primary by default
     toggleLap(primary, true);
   }).catch(function(e){ fail("Could not load leaderboard data. " + e.message); });
@@ -278,7 +287,7 @@
     }
   }
 
-  function trackEdges(){ return primary && primary.data ? primary.data.edges : null; }
+  function trackEdges(){ return globalEdges || (primary && primary.data ? primary.data.edges : null); }
   function trackImgMeta(){ return primary && primary.data ? primary.data.trackmap : null; }
 
   var trackImg=null, trackImgUrl=null;

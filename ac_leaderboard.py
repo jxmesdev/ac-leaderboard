@@ -418,6 +418,24 @@ class LeaderboardApp(object):
             stored["telemetry"] = relpath
         return [os.path.join(self.cfg.data_dir, relpath)] + extra
 
+    def _publish_edges(self):
+        """Grab + push this track's true-boundary file as soon as the track is
+        known (session load), not just on a PB -- so laps already on the site
+        get accurate edges after a mere refresh. No-op once the file exists."""
+        if not (self.track and self.cfg.repo_configured()):
+            return
+        name = telemetry.slug(self.track) + "__" + \
+            telemetry.slug(self.track_config) + "__edges.json"
+        if os.path.isfile(os.path.join(self.cfg.data_dir, "trackmaps", name)):
+            return
+        eg = self._grab_edges(self.track, self.track_config)
+        if eg is None:
+            log("edges: no usable fast_lane.ai for " + self.track)
+            return
+        log("edges: published " + eg[0])
+        if self.cfg.get("auto_push"):
+            self.git.request_push([eg[1]], "Track edges " + self.track)
+
     def _grab_edges(self, track, cfg):
         """Best-effort TRUE track boundary from the track's ai/fast_lane.ai."""
         try:
@@ -544,6 +562,7 @@ class LeaderboardApp(object):
             self._set(self.l_track, "Track: " + self._combo_name(track, cfg))
             self._set(self.l_car, "Car: " + (car or "-"))
             self._refresh_board()
+            self._publish_edges()
 
         # Decide (at this slow cadence) whether we're moving, so the per-frame
         # telemetry sampling above does no ac.* work while parked.
