@@ -83,8 +83,11 @@ for i, name in enumerate(app._app.users):
 print("driver button positions on-screen:",
       [mock_ac.STATE.widgets[app._app.driver_btns[i]]["pos"] for i in range(len(app._app.users))])
 
-# Select James (slot 0) for the lap.
+# Select James (slot 0) for the lap. Clicks stash the slot index (plain
+# module-level callback); the next acUpdate tick applies it.
 mock_ac.click(app._app.driver_btns[0])
+app.acUpdate(1 / 60.0)
+assert app._app.selected == "James", app._app.selected
 print("selected:", app._app.selected)
 
 

@@ -36,6 +36,7 @@ ROW_H = 22
 ACCENT = (0.96, 0.65, 0.14, 1.0)   # selected / leader highlight
 WHITE = (1.0, 1.0, 1.0, 1.0)
 MUTED = (0.60, 0.65, 0.70, 1.0)
+RED = (1.0, 0.25, 0.25, 1.0)       # error status text
 
 
 # Crash-proof breadcrumb log: written with flush+fsync so nothing is lost when
@@ -70,13 +71,17 @@ def log(msg):
         pass
 
 
-# THE Enter handler. It MUST be a plain module-level function: registering a
-# closure (or bound method) with ac.addOnValidateListener crashes AC natively
-# on Enter (proven on-rig by the diagnostic ladder -- levels 0-3 with a plain
-# function survived 10+ Enters each; an otherwise-identical build registering
-# a closure crashed instantly). It only stashes the typed text; the app's
-# update loop consumes it next tick, outside the input's event handler.
+# =============================================================================
+# EVERY ac.* listener callback MUST be a PLAIN MODULE-LEVEL FUNCTION.
+# Closures and bound methods crash AC natively or silently fail to fire
+# (proven on-rig: the validate closure crashed on Enter before its body ran;
+# the driver-grid click closures crashed or did nothing). The handlers below
+# only stash into module globals; the update loop consumes them next tick,
+# outside AC's input event handler.
+# =============================================================================
 _typed_name = None
+_pending_pick = None
+_auto_clicked = False
 
 
 def _on_validate_typed(value):
@@ -89,6 +94,50 @@ def _consume_typed_name():
     global _typed_name
     v = _typed_name
     _typed_name = None
+    return v
+
+
+def _stash_pick(i):
+    global _pending_pick
+    _pending_pick = i
+    dbg("pick fired: " + str(i))
+
+
+# One named module-level function per driver slot (closures are banned, and a
+# module function is the only way to bind the slot index safely).
+def _pick_0(x, y): _stash_pick(0)
+def _pick_1(x, y): _stash_pick(1)
+def _pick_2(x, y): _stash_pick(2)
+def _pick_3(x, y): _stash_pick(3)
+def _pick_4(x, y): _stash_pick(4)
+def _pick_5(x, y): _stash_pick(5)
+def _pick_6(x, y): _stash_pick(6)
+def _pick_7(x, y): _stash_pick(7)
+def _pick_8(x, y): _stash_pick(8)
+def _pick_9(x, y): _stash_pick(9)
+
+
+_PICK_CBS = (_pick_0, _pick_1, _pick_2, _pick_3, _pick_4,
+             _pick_5, _pick_6, _pick_7, _pick_8, _pick_9)
+
+
+def _consume_pick():
+    global _pending_pick
+    v = _pending_pick
+    _pending_pick = None
+    return v
+
+
+def _on_auto_clicked(x, y):
+    global _auto_clicked
+    _auto_clicked = True
+    dbg("auto toggle fired")
+
+
+def _consume_auto_clicked():
+    global _auto_clicked
+    v = _auto_clicked
+    _auto_clicked = False
     return v
 
 
@@ -118,6 +167,7 @@ class LeaderboardApp(object):
         self.last_seen_best = 0        # for auto-capture edge detection
         self.auto_capture = bool(self.cfg.get("auto_capture"))
         self.status_text = ""
+        self.status_error = False
         self._accum = 0.0
         # True only while the car is moving. Checked at the slow cadence so that
         # while parked/typing there are ZERO per-frame ac.* reads (which crash
@@ -179,7 +229,7 @@ class LeaderboardApp(object):
             bid = ac.addButton(self.window, "")
             ac.setPosition(bid, bx, by)
             ac.setSize(bid, col_w, 22)
-            ac.addOnClickedListener(bid, self._make_pick_cb(i))
+            ac.addOnClickedListener(bid, _PICK_CBS[i])
             try:
                 ac.setFontSize(bid, 13)
             except Exception:
@@ -195,13 +245,14 @@ class LeaderboardApp(object):
         self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 22,
                                            _on_validate_typed)
         y += 28
-        self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
-                                   self.on_toggle_auto)
-        y += 28
 
-        # Status line.
+        # Status line (above the auto-capture button; red when it's an error).
         self.l_status = self._label("", MARGIN, y, 12)
         y += 22
+
+        self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
+                                   _on_auto_clicked)
+        y += 28
 
         # Leaderboard header + rows (4 aligned columns).
         self._label("#", self.cx_pos, y, 13)
@@ -236,17 +287,12 @@ class LeaderboardApp(object):
         return lid
 
     def _button(self, text, x, y, w, h, cb):
+        # cb MUST be a plain module-level function (closures/bound methods
+        # crash AC or silently fail -- see the listener block at the top).
         bid = ac.addButton(self.window, text)
         ac.setPosition(bid, x, y)
         ac.setSize(bid, w, h)
-        # Wrap in a closure: addOnClickedListener fires closures reliably but
-        # not bound methods (cb here is usually a bound method). NB: this is
-        # CLICK listeners only -- addOnValidateListener requires a plain
-        # module-level function (closures crash AC natively; see
-        # _on_validate_typed).
-        def clicked(px, py):
-            cb(px, py)
-        ac.addOnClickedListener(bid, clicked)
+        ac.addOnClickedListener(bid, cb)
         try:
             ac.setFontSize(bid, 13)
         except Exception:
@@ -273,11 +319,6 @@ class LeaderboardApp(object):
     # -- driver selection -------------------------------------------------
     def current_user(self):
         return self.selected
-
-    def _make_pick_cb(self, index):
-        def cb(x, y):
-            self.on_pick(index)
-        return cb
 
     def on_pick(self, index):
         if index < 0 or index >= len(self.users):
@@ -328,11 +369,12 @@ class LeaderboardApp(object):
         for u in self.users:
             if storage.norm(u) == storage.norm(name):
                 self._set_status("'" + u + "' already exists -- "
-                                 "click their name to switch")
+                                 "click their name to switch", error=True)
                 log("add_driver: done (existing)")
                 return
         if len(self.users) >= MAX_DRIVERS:
-            self._set_status("driver limit reached (" + str(MAX_DRIVERS) + ")")
+            self._set_status("driver limit reached (" + str(MAX_DRIVERS) + ")",
+                             error=True)
             return
         self.store.add_user(name)
         self.users = self.store.all_users()
@@ -409,7 +451,7 @@ class LeaderboardApp(object):
 
     def _publish(self, message, force=False, extra_paths=None):
         if not self.cfg.repo_configured():
-            self._set_status("not a git clone -- cannot push")
+            self._set_status("not a git clone -- cannot push", error=True)
             return
         if not (self.cfg.get("auto_push") or force):
             return
@@ -419,15 +461,18 @@ class LeaderboardApp(object):
         self.git.request_push(paths, message)
 
     def _on_git_status(self, status):
-        # Called from the git worker thread; only touches a simple string.
+        # Called from the git worker thread; only touches simple values.
+        self.status_error = status.startswith("error")
         self.status_text = "git: " + status
 
     # -- rendering --------------------------------------------------------
-    def _set_status(self, text):
+    def _set_status(self, text, error=False):
         self.status_text = text
+        self.status_error = error
 
     def _apply_status(self):
         self._set(self.l_status, self.status_text)
+        self._color(self.l_status, RED if self.status_error else MUTED)
 
     def _refresh_board(self):
         if not self.row_pos:
@@ -474,6 +519,15 @@ class LeaderboardApp(object):
                 log("update: clearing input")
                 self._set(self.in_newuser, "")
             log("update: pending handled")
+
+        # A clicked driver button stashes its slot index; apply it here,
+        # outside the click event handler. Same for the auto-capture toggle.
+        pick = _consume_pick()
+        if pick is not None:
+            log("update: pick " + str(pick))
+            self.on_pick(pick)
+        if _consume_auto_clicked():
+            self.on_toggle_auto()
 
         # Mirror git status to the log from the MAIN thread (the worker thread
         # must never call ac.*). Cheap string compare each frame.
@@ -542,7 +596,8 @@ class LeaderboardApp(object):
         self.last_seen_best = best
         user = self.current_user()
         if user is None:
-            self._set_status("lap " + format_ms(best) + " not saved -- no driver selected")
+            self._set_status("lap " + format_ms(best) +
+                             " not saved -- no driver selected", error=True)
             return
         self._record(user, best)
 
