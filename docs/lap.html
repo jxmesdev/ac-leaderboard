@@ -301,7 +301,13 @@
           var sorted=globalSections.slice().sort(function(x,y){ return x["in"]-y["in"]; });
           var n=1;
           sorted.forEach(function(sec){
-            if(/straight/i.test(sec.text||"")) { sec.turn=null; return; }
+            // number CORNERS only: skip straights and named non-corner
+            // features like "Hailwoods Hill" (a hill, not a bend) -- but
+            // keep "Paddock Hill Bend" and friends.
+            var t=sec.text||"";
+            var nonCorner = /straight/i.test(t) ||
+              (/\bhill\b/i.test(t) && !/bend|curve|corner|hairpin|chicane/i.test(t));
+            if(nonCorner){ sec.turn=null; return; }
             sec.turn=n++;
           });
         }
