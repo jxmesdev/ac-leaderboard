@@ -142,6 +142,7 @@
   var cam = {scale:1, x:0, y:0};   // map zoom/pan on top of the fit-to-view
   var focus = null;     // {i, d0, d1} sector focus (nsp domain), null = whole lap
   var mapFitPending = false;   // drawMap should recompute cam for the focus
+  var camAnim = null;          // {from, to, t0} camera fly-to animation
   var mapP = null;      // world->screen transform of the LAST drawMap (for map hover)
 
   function pretty(id){ return (id||"").replace(/_/g," ").replace(/\b\w/g,function(c){return c.toUpperCase();}); }
@@ -507,9 +508,11 @@
     function P(x,z){ var m=toMap(x,z); return S(m[0],m[1]); }
     mapP = P;   // map-hover uses the exact transform of the last draw
 
-    // sector focus: aim the cam at the primary lap's points in that sector
+    // sector focus: aim the cam at the primary lap's points in that sector,
+    // flying there smoothly instead of snapping.
     if(mapFitPending){
       mapFitPending=false;
+      var target=null;
       if(focus && primary && primary.data){
         var fd=primary.data, b0x=Infinity,b1x=-Infinity,b0y=Infinity,b1y=-Infinity;
         for(var fi=0; fi<fd.nsp.length; fi++){
@@ -523,11 +526,27 @@
           var fsc=Math.min((w-2*fpad)/Math.max(1e-6,b1x-b0x),
                            (h-2*fpad)/Math.max(1e-6,b1y-b0y));
           fsc=Math.max(1, Math.min(14, fsc));
-          cam={scale:fsc, x:w/2-(b0x+b1x)/2*fsc, y:h/2-(b0y+b1y)/2*fsc};
+          target={scale:fsc, x:w/2-(b0x+b1x)/2*fsc, y:h/2-(b0y+b1y)/2*fsc};
         }
       } else {
-        cam={scale:1, x:0, y:0};
+        target={scale:1, x:0, y:0};
       }
+      if(target) camAnim={from:{scale:cam.scale, x:cam.x, y:cam.y}, to:target,
+                         t0:performance.now()};
+    }
+    // camera fly-to: zoom interpolates geometrically, the base-space point at
+    // the screen centre linearly -- reads as a smooth zoom, not a slide+scale.
+    if(camAnim){
+      var ck=Math.min(1, (performance.now()-camAnim.t0)/380);
+      var ce=ck<0.5 ? 2*ck*ck : 1-Math.pow(-2*ck+2,2)/2;   // easeInOutQuad
+      var cf=camAnim.from, ct=camAnim.to;
+      var cs=cf.scale*Math.pow(ct.scale/cf.scale, ce);
+      var fcx=(w/2-cf.x)/cf.scale, fcy=(h/2-cf.y)/cf.scale;
+      var tcx=(w/2-ct.x)/ct.scale, tcy=(h/2-ct.y)/ct.scale;
+      var ccx=fcx+(tcx-fcx)*ce, ccy=fcy+(tcy-fcy)*ce;
+      cam={scale:cs, x:w/2-ccx*cs, y:h/2-ccy*cs};
+      if(ck>=1){ cam={scale:ct.scale, x:ct.x, y:ct.y}; camAnim=null; }
+      else scheduleRender();
     }
 
     // Background priority: TRUE edges (from ai/fast_lane.ai, world coords --
@@ -578,18 +597,22 @@
   function attachMapInteraction(){
     var cv=document.getElementById("map"), dragging=false, lx=0, ly=0;
     cv.addEventListener("wheel", function(e){
-      e.preventDefault();
+      e.preventDefault(); camAnim=null;
       var r=cv.getBoundingClientRect(), mxp=e.clientX-r.left, myp=e.clientY-r.top;
       var ns=Math.max(1, Math.min(14, cam.scale*Math.exp(-e.deltaY*0.0015)));
       cam.x = mxp-(mxp-cam.x)*(ns/cam.scale);
       cam.y = myp-(myp-cam.y)*(ns/cam.scale);
       cam.scale = ns; scheduleRender();
     }, {passive:false});
-    cv.addEventListener("mousedown", function(e){ dragging=true; lx=e.clientX; ly=e.clientY; cv.style.cursor="grabbing"; });
+    cv.addEventListener("mousedown", function(e){ camAnim=null; dragging=true; lx=e.clientX; ly=e.clientY; cv.style.cursor="grabbing"; });
     window.addEventListener("mouseup", function(){ dragging=false; cv.style.cursor="grab"; });
     window.addEventListener("mousemove", function(e){ if(!dragging) return;
       cam.x+=(e.clientX-lx); cam.y+=(e.clientY-ly); lx=e.clientX; ly=e.clientY; scheduleRender(); });
-    cv.addEventListener("dblclick", function(){ cam={scale:1,x:0,y:0}; scheduleRender(); });
+    cv.addEventListener("dblclick", function(){
+      camAnim={from:{scale:cam.scale, x:cam.x, y:cam.y},
+               to:{scale:1, x:0, y:0}, t0:performance.now()};
+      scheduleRender();
+    });
     cv.style.cursor="grab";
     // hover -> cursor: nearest PRIMARY-lap sample in screen space (<=25 px),
     // via the exact transform of the last draw so pan/zoom is accounted for.
