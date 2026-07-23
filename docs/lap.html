@@ -172,6 +172,7 @@
   var focus = null;     // {i, d0, d1} sector focus (nsp domain), null = whole lap
   var mapFitPending = false;   // drawMap should recompute cam for the focus
   var camAnim = null;          // {from, to, t0} camera fly-to animation
+  var camCustom = false;       // user panned/zoomed away: no sector chip active
   var mapP = null;      // world->screen transform of the LAST drawMap (for map hover)
   var domShown = [0,1]; // trace x-domain as DISPLAYED (animates on focus)
   var domAnim = null;   // {from, to, t0}
@@ -711,6 +712,8 @@
     var cv=document.getElementById("map"), dragging=false, lx=0, ly=0;
     cv.addEventListener("wheel", function(e){
       e.preventDefault(); camAnim=null;
+      if(focus){ focus=null; startDomAnim(); }
+      if(!camCustom || secSig){ camCustom=true; secSig=""; scheduleRender(); }
       var r=cv.getBoundingClientRect(), mxp=e.clientX-r.left, myp=e.clientY-r.top;
       var ns=Math.max(1, Math.min(14, cam.scale*Math.exp(-e.deltaY*0.0015)));
       cam.x = mxp-(mxp-cam.x)*(ns/cam.scale);
@@ -720,11 +723,11 @@
     cv.addEventListener("mousedown", function(e){ camAnim=null; dragging=true; lx=e.clientX; ly=e.clientY; cv.style.cursor="grabbing"; });
     window.addEventListener("mouseup", function(){ dragging=false; cv.style.cursor="grab"; });
     window.addEventListener("mousemove", function(e){ if(!dragging) return;
+      if(focus){ focus=null; startDomAnim(); }
+      if(!camCustom){ camCustom=true; secSig=""; }
       cam.x+=(e.clientX-lx); cam.y+=(e.clientY-ly); lx=e.clientX; ly=e.clientY; scheduleRender(); });
     cv.addEventListener("dblclick", function(){
-      camAnim={from:{scale:cam.scale, x:cam.x, y:cam.y},
-               to:{scale:1, x:0, y:0}, t0:performance.now()};
-      scheduleRender();
+      focusAll();   // resets cam (animated) AND reselects "All" on both bars
     });
     cv.style.cursor="grab";
     // hover -> cursor: nearest PRIMARY-lap sample in screen space (<=25 px),
@@ -813,11 +816,12 @@
   }
   function focusSector(i){
     var b=sectorBounds(); if(!b || !b[i]) return;
-    focus={i:i, d0:b[i][0], d1:b[i][1]};
+    focus={i:i, d0:b[i][0], d1:b[i][1]}; camCustom=false;
     startDomAnim(); mapFitPending=true; secSig=""; scheduleRender();
   }
   function focusAll(){
-    focus=null; startDomAnim(); mapFitPending=true; secSig=""; scheduleRender();
+    focus=null; camCustom=false;
+    startDomAnim(); mapFitPending=true; secSig=""; scheduleRender();
   }
   var secSig="";
   // fill a container with [S1]..[Sn][All] focus buttons reflecting `focus`;
@@ -832,7 +836,7 @@
       el.appendChild(b);
     });
     var all=document.createElement("button"); all.textContent="All";
-    if(!focus) all.className="on";
+    if(!focus && !camCustom) all.className="on";
     all.addEventListener("click", focusAll);
     el.appendChild(all);
   }
@@ -842,7 +846,7 @@
     var mapbar=document.getElementById("mapsec");
     if(!(primary && primary.data)){ card.style.display="none"; mapbar.innerHTML=""; secSig=""; return; }
     var ps=splitsOf(primary);
-    var sig=(ps?ps.join(","):"none")+"|"+(focus?focus.i:-1)+"|"+
+    var sig=(ps?ps.join(","):"none")+"|"+(focus?focus.i:-1)+"|"+(camCustom?"c":"")+"|"+
       sl.map(function(l){ return l.rec.telemetry; }).join(";");
     if(sig===secSig) return;
     secSig=sig;

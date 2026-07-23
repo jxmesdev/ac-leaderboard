@@ -114,10 +114,7 @@
     <div id="board"><div class="empty">Loading…</div></div>
   </div>
 
-  <footer>
-    <span class="fbrand">//</span> Bradford Leaderboard &nbsp;·&nbsp;
-    <span class="updated" id="updated"></span>
-  </footer>
+  <footer><span class="fbrand">//</span> Bradford Leaderboard &nbsp;·&nbsp; Assetto Corsa lap telemetry</footer>
 </div>
 
 <script>
@@ -297,8 +294,6 @@
     records = Array.isArray(res[0]) ? res[0] : [];
     users = Array.isArray(res[1]) ? res[1] : [];
     fillCombos(); fillUsers(); render();
-    document.getElementById("updated").textContent =
-      records.length ? (records.length + " times recorded") : "No times recorded yet.";
     var first = document.getElementById("combo");
     if (first.options.length === 2) { first.selectedIndex = 1; render(); }
   });
