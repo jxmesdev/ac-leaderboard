@@ -28,8 +28,12 @@ APP_NAME = "AC Leaderboard"
 
 # Diagnostic build markers. BUILD is written to debug.log so we always know which
 # version produced a given log. DIAG_TELEMETRY=False disables per-frame sampling.
-BUILD = "telemetry-moving-gate-v3"
+BUILD = "minimal-update-v4"
 DIAG_TELEMETRY = True
+# When True, acUpdate does NOTHING except apply a typed driver name -- no
+# telemetry, no git mirror, no per-0.5s track/car/best-lap ac.* reads. Used to
+# test whether ongoing acUpdate ac.* activity is what crashes AC on Enter.
+DIAG_MINIMAL_UPDATE = True
 
 # Layout constants (pixels).
 WIN_W = 380
@@ -467,6 +471,10 @@ class LeaderboardApp(object):
                 log("update: clearing input")
                 self._set(self.in_newuser, "")
             log("update: pending handled")
+
+        if DIAG_MINIMAL_UPDATE:
+            # Inert: no telemetry, no git mirror, no per-0.5s ac.* reads.
+            return
 
         # Mirror git status to the log from the MAIN thread (the worker thread
         # must never call ac.*). Cheap string compare each frame.
