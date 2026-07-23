@@ -283,7 +283,9 @@ class LeaderboardApp(object):
         if index < 0 or index >= len(self.users):
             return
         self.selected = self.users[index]
-        self.last_seen_best = 0        # allow capturing the current best for them
+        # NB: last_seen_best is NOT reset -- a lap driven before this switch is
+        # never credited to the newly picked driver. Only a best set AFTER
+        # selection (i.e. beating the session best) records.
         self._render_driver_grid()
         self._refresh_board()
         self._set_status("driver: " + self.selected)
@@ -335,7 +337,7 @@ class LeaderboardApp(object):
         self.store.add_user(name)
         self.users = self.store.all_users()
         self.selected = name
-        self.last_seen_best = 0
+        # last_seen_best NOT reset (see on_pick): earlier laps stay unattributed.
         self._render_driver_grid()
         self._refresh_board()
         self.store.save()
@@ -535,12 +537,13 @@ class LeaderboardApp(object):
             return
         if self.last_seen_best != 0 and best >= self.last_seen_best:
             return  # nothing new since last poll
+        # Mark the lap as seen FIRST: with no driver selected it is discarded,
+        # not held for whoever gets picked later (they didn't drive it).
+        self.last_seen_best = best
         user = self.current_user()
         if user is None:
-            # Keep prompting so the lap is still captured once a driver is picked.
-            self._set_status("new best " + format_ms(best) + " -- pick your driver to save it")
+            self._set_status("lap " + format_ms(best) + " not saved -- no driver selected")
             return
-        self.last_seen_best = best
         self._record(user, best)
 
 
