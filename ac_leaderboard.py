@@ -19,29 +19,48 @@ if APP_DIR not in sys.path:
 
 import ac  # provided by Assetto Corsa
 
-from acl_core import ac_data, config, storage, telemetry, trackmap
-from acl_core.leaderboard import leaderboard_for
-from acl_core.timefmt import format_ms
-# NOTE: acl_core.git_sync (which imports threading + subprocess) is imported
-# lazily inside __init__ so DIAG_NO_GIT can keep those out of the process
-# entirely -- testing whether they are what crashes AC's text-field Enter.
-
 APP_NAME = "AC Leaderboard"
 
-# One-shot diagnostic: when True, acUpdate applies a typed driver name and does
-# NOTHING else -- no ac.getCarState/getTrackName polling. (Confirmed the update
-# loop is NOT the crash cause: crashed on Enter even with this True.)
-DIAG_INERT_UPDATE = True
+# =============================================================================
+# DIAGNOSTIC LADDER. Everything obvious was ruled out individually (widgets,
+# buttons, update loop, git threading/subprocess) yet the app still crashes on
+# Enter while the bare test app survives 35+. So: start from an EXACT clone of
+# the bare test app inside THIS file and add one suspect back per level.
+#
+# On the rig: test Enter ~10x, then edit this ONE number, restart AC, repeat.
+# Report the highest level that survives.
+#
+#   0 = exact bare test app (field + counter label; ac.log only).  [= textbox_test]
+#   1 = + dbg() file logging with fsync (debug.log breadcrumbs)
+#   2 = + the acl_core imports (json/zlib/struct etc. enter the interpreter)
+#   3 = + Config/Store/LapRecorder objects (reads config.json + users.json)
+#   4 = full app (everything except git, which stays off)
+# =============================================================================
+DIAG_LEVEL = int(os.environ.get("ACL_DIAG_LEVEL", "0"))
 
-# (Ruled out: the bare test app ran ~58 widgets with no crash, so widget count
-# is NOT the cause. Buttons ruled out too -- crashed with none. Full UI restored.)
+# Levels 0-3 imply: inert update loop, no git. These stay off until the crash
+# is found (both already individually ruled out as causes, but kept off so each
+# ladder level changes exactly ONE thing).
+DIAG_INERT_UPDATE = not os.environ.get("ACL_DIAG_FULL")
 DIAG_NO_BUTTONS = False
+DIAG_NO_GIT = not os.environ.get("ACL_DIAG_FULL")
 
-# One-shot diagnostic: when True, the git machinery is never imported or created,
-# so threading + subprocess never enter AC's embedded interpreter. This is the
-# prime remaining suspect for the native Enter crash (the only difference between
-# the safe bare test app and the crashing real app). Remove once identified.
-DIAG_NO_GIT = True
+# acl_core imports are deferred so DIAG_LEVEL <= 1 loads NOTHING beyond `ac`
+# (byte-for-byte the bare test app's import footprint).
+ac_data = config = storage = telemetry = trackmap = None
+leaderboard_for = format_ms = None
+
+
+def _load_core():
+    global ac_data, config, storage, telemetry, trackmap
+    global leaderboard_for, format_ms
+    from acl_core import ac_data as _acd, config as _cfg, storage as _sto, \
+        telemetry as _tel, trackmap as _tmp
+    from acl_core.leaderboard import leaderboard_for as _lb
+    from acl_core.timefmt import format_ms as _fm
+    ac_data, config, storage = _acd, _cfg, _sto
+    telemetry, trackmap = _tel, _tmp
+    leaderboard_for, format_ms = _lb, _fm
 
 # Layout constants (pixels).
 WIN_W = 380
@@ -578,23 +597,78 @@ class LeaderboardApp(object):
 # -- module-level AC entry points -----------------------------------------
 _app = None
 
+# Bare-mode state (DIAG_LEVEL 0-3): an exact clone of the bare test app that
+# survived 35 Enters -- module-level widgets, module-level plain-function
+# validate, counter label, ac.log. Levels differ only in what ELSE is loaded.
+_bare_label = None
+_bare_input = None
+_bare_count = 0
+
+
+def _bare_validate(value):
+    global _bare_count
+    _bare_count += 1
+    try:
+        ac.log("[ladder] enter #" + str(_bare_count) + " -> " + repr(value))
+        ac.console("[ladder] enter #" + str(_bare_count))
+    except Exception:
+        pass
+    if DIAG_LEVEL >= 1:
+        dbg("enter #" + str(_bare_count) + " -> " + repr(value))
+    if _bare_label is not None:
+        try:
+            ac.setText(_bare_label, "Enters survived: " + str(_bare_count))
+        except Exception:
+            pass
+
+
+def _bare_build(window_name):
+    global _bare_label, _bare_input
+    app = ac.newApp(window_name)
+    ac.setSize(app, 340, 120)
+    _bare_label = ac.addLabel(app, "LEVEL " + str(DIAG_LEVEL) +
+                              ": type + Enter ~10x")
+    ac.setPosition(_bare_label, 10, 30)
+    ac.setFontSize(_bare_label, 14)
+    _bare_input = ac.addTextInput(app, "")
+    ac.setPosition(_bare_input, 10, 58)
+    ac.setSize(_bare_input, 320, 26)
+    ac.addOnValidateListener(_bare_input, _bare_validate)
+
 
 def acMain(ac_version):
     global _app
-    dbg_reset()
-    dbg("acMain: start")
+    if DIAG_LEVEL >= 1:
+        dbg_reset()
+        dbg("acMain: start LEVEL=" + str(DIAG_LEVEL))
     try:
-        _app = LeaderboardApp().build()
-        dbg("acMain: build ok")
+        if DIAG_LEVEL >= 2:
+            _load_core()          # acl_core (+ json/zlib/struct) enters the process
+            if DIAG_LEVEL >= 1:
+                dbg("acMain: core imported")
+        if DIAG_LEVEL >= 3:
+            _app = LeaderboardApp()   # Config/Store/LapRecorder objects
+            dbg("acMain: objects created")
+        if DIAG_LEVEL >= 4:
+            _app.build()              # full UI + full class validate path
+            dbg("acMain: build ok")
+        else:
+            _bare_build(APP_NAME)     # exact bare-test window + field
+            if DIAG_LEVEL >= 1:
+                dbg("acMain: bare build ok")
     except Exception:
-        dbg("acMain error:\n" + traceback.format_exc())
-        log("acMain error:\n" + traceback.format_exc())
+        if DIAG_LEVEL >= 1:
+            dbg("acMain error:\n" + traceback.format_exc())
+        try:
+            ac.log("[ac_leaderboard] acMain error:\n" + traceback.format_exc())
+        except Exception:
+            pass
     return APP_NAME
 
 
 def acUpdate(deltaT):
-    if _app is None:
-        return
+    if DIAG_LEVEL < 4 or _app is None:
+        return   # bare modes: identical to the test app's empty acUpdate
     try:
         _app.update(deltaT)
     except Exception:
@@ -602,7 +676,7 @@ def acUpdate(deltaT):
 
 
 def acShutdown():
-    if _app is None:
+    if DIAG_LEVEL < 4 or _app is None:
         return
     try:
         _app.store.save()
