@@ -66,6 +66,7 @@
   .toggle button + button { border-left: 1px solid var(--line); }
   .toggle button.on { background: var(--panel2); color: var(--text); font-weight: 600; }
   .empty { padding: 40px 18px; text-align: center; color: var(--muted); }
+  @media (max-width: 760px) { .seccol { display: none; } }
   footer { margin-top: 26px; color: var(--muted); font-size: 12px; text-align: center; }
   .updated { color: var(--muted); font-size: 12px; }
 </style>
@@ -171,16 +172,21 @@
     var nDrivers = assignTrophies(all);
     var rows = viewMode === "best" ? bestPerUser(all) : all;
     head.textContent = rows.length ? comboLabel(rows[0]) : "—";
-    count.textContent = viewMode === "best"
-      ? nDrivers + (nDrivers === 1 ? " driver" : " drivers")
-      : rows.length + (rows.length === 1 ? " lap" : " laps") + " · " +
-        nDrivers + (nDrivers === 1 ? " driver" : " drivers");
+    count.textContent = all.length + (all.length === 1 ? " lap" : " laps") +
+      " · " + nDrivers + (nDrivers === 1 ? " driver" : " drivers");
     if (!rows.length) {
       board.innerHTML = '<div class="empty">No times yet.</div>';
       return;
     }
     var leader = rows[0].time_ms; // fastest lap shown in the current view mode
-    var html = '<table><thead><tr><th>#</th><th>Driver</th><th style="text-align:right">Time</th><th style="text-align:right">Gap</th></tr></thead><tbody>';
+    // sector columns (desktop only): as many as any lap in the combo has
+    var nSec = 0;
+    all.forEach(function (r) {
+      if (r.splits && r.splits.length > nSec) nSec = Math.min(r.splits.length, 4);
+    });
+    var html = '<table><thead><tr><th>#</th><th>Driver</th><th style="text-align:right">Time</th>';
+    for (var si = 0; si < nSec; si++) html += '<th class="seccol" style="text-align:right">S' + (si + 1) + '</th>';
+    html += '<th style="text-align:right">Gap</th></tr></thead><tbody>';
     rows.forEach(function (r, i) {
       var cls = i < 3 ? "p" + (i + 1) : "";
       if (highlight && (r.user || "").toLowerCase() === highlight) cls += " hl";
@@ -189,8 +195,12 @@
       html += '<tr class="' + cls + '" data-href="' + escapeHtml(lapHref(r)) + '">' +
         '<td class="rank">' + (i + 1) + '</td>' +
         '<td class="user">' + trophy + escapeHtml(r.user) + badge + '</td>' +
-        '<td class="time">' + fmtTime(r.time_ms) + '</td>' +
-        '<td class="gap">' + fmtGap(r.time_ms - leader) + '</td></tr>';
+        '<td class="time">' + fmtTime(r.time_ms) + '</td>';
+      for (var sj = 0; sj < nSec; sj++) {
+        var sv = r.splits && r.splits[sj] != null ? (r.splits[sj] / 1000).toFixed(3) : "—";
+        html += '<td class="gap seccol">' + sv + '</td>';
+      }
+      html += '<td class="gap">' + fmtGap(r.time_ms - leader) + '</td></tr>';
     });
     html += '</tbody></table>';
     board.innerHTML = html;

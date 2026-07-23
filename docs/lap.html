@@ -16,7 +16,7 @@
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text);
     font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-  .wrap { max-width:1100px; margin:0 auto; padding:18px 16px 60px; }
+  .wrap { max-width:1100px; margin:0 auto; padding:28px 16px 60px; }
   a { color:var(--accent); text-decoration:none; }
   a:hover { text-decoration:underline; }
   a.brand { display:block; color:var(--text); margin-bottom:30px; }
@@ -44,7 +44,9 @@
   .lap .dl { font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; font-size:12px; }
   .traces { margin-top:16px; }
   .readout { padding:10px 14px; }
-  .readout table { width:100%; border-collapse:collapse; font-size:12px; }
+  .readout table { width:100%; border-collapse:collapse; font-size:12px;
+    table-layout:fixed; }
+  .readout th:first-child { width:22%; }
   .readout th, .readout td { text-align:right; padding:3px 4px; font-variant-numeric:tabular-nums; }
   .readout th:first-child, .readout td:first-child { text-align:left; }
   .readout thead th { color:var(--muted); font-weight:600; }
@@ -66,13 +68,6 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
   .sectable thead th { color:var(--muted); font-weight:600; }
   .secmuted { color:var(--muted); font-size:12px; }
-  #tt { position:fixed; display:none; z-index:20; pointer-events:none;
-    background:var(--panel2); border:1px solid var(--line); border-radius:8px;
-    padding:6px 9px; font-size:12px; box-shadow:0 4px 14px rgba(0,0,0,.35);
-    font-variant-numeric:tabular-nums; }
-  #tt .tth { color:var(--muted); margin-bottom:3px; }
-  #tt .ttr { display:flex; align-items:center; gap:6px; white-space:nowrap; }
-  #tt .ttr b { font-weight:600; font-family:ui-monospace,Menlo,monospace; margin-left:auto; padding-left:10px; }
 </style>
 </head>
 <body>
@@ -116,7 +111,6 @@
 
   <div id="error" class="empty" style="display:none"></div>
 </div>
-<div id="tt"></div>
 
 <script>
 (function () {
@@ -261,6 +255,7 @@
 
   function render(){
     var sl=shownLaps();
+    if(cursor==null && sl.length) cursor=0;   // default: start line
     laps.forEach(function(l){
       if(l._sw) l._sw.style.opacity = l.shown? "1":"0.35";
       if(l._cb) l._cb.checked = l.shown;
@@ -358,6 +353,30 @@
         var s=sampleAt(l.data, cursor); if(!s) return;
         ctx.fillStyle=l.color; ctx.beginPath(); ctx.arc(cx,yOf(s[ch.key]),2.6,0,7); ctx.fill();
       });
+      // value box on THIS trace (every trace gets one, not just the hovered)
+      var rows=[];
+      sl.forEach(function(l){
+        var s=sampleAt(l.data, cursor); if(!s) return;
+        rows.push({color:l.color, txt:fmtVal(ch, s[ch.key])});
+      });
+      if(rows.length){
+        ctx.font="11px ui-monospace,Menlo,monospace";
+        var tw=0;
+        rows.forEach(function(r0){ tw=Math.max(tw, ctx.measureText(r0.txt).width); });
+        var bw=tw+26, bh=rows.length*16+8;
+        var bx=cx+10; if(bx+bw>PADL+plotW-4) bx=cx-10-bw;
+        // drop below the channel label when the box would cover it
+        var by=(bx<PADL+150)? PADT+22 : PADT+6;
+        ctx.globalAlpha=0.92; ctx.fillStyle=css("--panel2");
+        ctx.fillRect(bx,by,bw,bh);
+        ctx.globalAlpha=1; ctx.strokeStyle=linec; ctx.strokeRect(bx,by,bw,bh);
+        rows.forEach(function(r0,ri){
+          var ry=by+8+ri*16;
+          ctx.fillStyle=r0.color; ctx.fillRect(bx+6,ry,8,8);
+          ctx.fillStyle=textc; ctx.textAlign="right"; ctx.textBaseline="top";
+          ctx.fillText(r0.txt, bx+bw-6, ry-1);
+        });
+      }
     }
     ctx.restore();
   }
@@ -585,9 +604,8 @@
       var nc = best>=0 ? d.nsp[best] : null;
       if(nc!==cursor){ cursor=nc; scheduleRender(); }
     });
-    cv.addEventListener("mouseleave", function(){
-      if(cursor!=null){ cursor=null; scheduleRender(); }
-    });
+    // mouseleave intentionally keeps the last cursor: the At-cursor panel
+    // stays populated (defaults to the start line before any hover).
   }
 
   function drawReadout(sl){
@@ -730,29 +748,6 @@
     if(ch.key==="str") return v.toFixed(0)+"°";
     return Math.round(v)+"%";   // thr / brk
   }
-  function hideTooltip(){ document.getElementById("tt").style.display="none"; }
-  // floating tooltip near the pointer: distance + each shown lap's value of
-  // the hovered channel. Trace hover only — the map uses the AT CURSOR panel.
-  function updateTooltip(e, ch){
-    var tt=document.getElementById("tt"), sl=shownLaps();
-    if(cursor==null || !sl.length){ hideTooltip(); return; }
-    var len = primary && primary.data ? primary.data.track_len_m : 0;
-    var html="<div class='tth'>"+(len? Math.round(cursor*len)+" m" : Math.round(cursor*100)+"%")+"</div>";
-    sl.forEach(function(l){
-      var s=sampleAt(l.data, cursor); if(!s) return;
-      html+="<div class='ttr'><span class='swatch' style='background:"+l.color+"'></span>"+
-        esc(l.rec.user)+"<b>"+fmtVal(ch, s[ch.key])+"</b></div>";
-    });
-    tt.innerHTML=html; tt.style.display="block";
-    var px=(e.touches?e.touches[0].clientX:e.clientX);
-    var py=(e.touches?e.touches[0].clientY:e.clientY);
-    var tw=tt.offsetWidth, th=tt.offsetHeight;
-    var lx=px+14, ly=py+16;   // offset so it never sits under the pointer
-    if(lx+tw>window.innerWidth-8) lx=px-tw-14;
-    if(ly+th>window.innerHeight-8) ly=py-th-16;
-    if(lx<4) lx=4; if(ly<4) ly=4;
-    tt.style.left=lx+"px"; tt.style.top=ly+"px";
-  }
   function attachHover(){
     function handle(e, cv, ch){
       var rect=cv.getBoundingClientRect();
@@ -761,15 +756,13 @@
       var dom=traceDomain();
       var f=Math.max(0,Math.min(1,(cx-PADL)/plotW));
       cursor=dom[0]+f*(dom[1]-dom[0]);   // map mouse x into the (possibly focused) domain
-      updateTooltip(e, ch);
       scheduleRender();
     }
     traceCanvases.forEach(function(t){
       t.cv.addEventListener("mousemove",function(e){ handle(e,t.cv,t.ch); });
       t.cv.addEventListener("touchmove",function(e){ handle(e,t.cv,t.ch); e.preventDefault(); }, {passive:false});
     });
-    document.getElementById("traces").addEventListener("mouseleave",function(){
-      cursor=null; hideTooltip(); scheduleRender(); });
+
   }
 })();
 </script>
