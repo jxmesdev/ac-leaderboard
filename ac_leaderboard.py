@@ -128,6 +128,22 @@ def _consume_pick():
     return v
 
 
+_web_clicked = False
+
+
+def _on_web_clicked(x, y):
+    global _web_clicked
+    _web_clicked = True
+    dbg("web link clicked")
+
+
+def _consume_web_clicked():
+    global _web_clicked
+    v = _web_clicked
+    _web_clicked = False
+    return v
+
+
 def _valid_splits(splits, lap_ms):
     """Sanity-check sector times against the lap: non-empty, all positive,
     and summing to (about) the lap time. Returns the list or None."""
@@ -203,7 +219,7 @@ class LeaderboardApp(object):
     # -- construction -----------------------------------------------------
     def build(self):
         driver_grid_rows = (MAX_DRIVERS + DRIVER_COLS - 1) // DRIVER_COLS
-        win_h = 150 + driver_grid_rows * 26 + 140 + self._rows * ROW_H
+        win_h = 150 + driver_grid_rows * 26 + 170 + self._rows * ROW_H
         self.window = ac.newApp(APP_NAME)
         ac.setSize(self.window, WIN_W, win_h)
         try:
@@ -266,6 +282,10 @@ class LeaderboardApp(object):
             self.row_time.append(self._label("", self.cx_time, y, 13))
             self.row_gap.append(self._label("", self.cx_gap, y, 13))
             y += ROW_H
+
+        self._button("Open web leaderboard", MARGIN, y, 170, 22,
+                     _on_web_clicked)
+        y += 28
 
         if not self.cfg.repo_configured():
             self._set_status("not a git clone -- times save locally, no push")
@@ -657,6 +677,14 @@ class LeaderboardApp(object):
         if pick is not None:
             log("update: pick " + str(pick))
             self.on_pick(pick)
+        if _consume_web_clicked():
+            url = self.cfg.get("web_url") or \
+                "https://jxmesdev.github.io/ac-leaderboard/"
+            try:
+                os.startfile(url)          # default browser (Windows)
+            except Exception:
+                self._set_status(url)      # fallback: show the address
+
 
         # Mirror git status to the log from the MAIN thread (the worker thread
         # must never call ac.*). Cheap string compare each frame.

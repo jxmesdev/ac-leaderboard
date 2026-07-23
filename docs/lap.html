@@ -292,7 +292,21 @@
       .catch(function(){});
     getJSON("data/trackmaps/"+slugjs(primary.rec.track)+"__"+
             slugjs(primary.rec.config)+"__sections.json")
-      .then(function(sc){ globalSections=sc.sections||null; scheduleRender(); })
+      .then(function(sc){
+        globalSections=sc.sections||null;
+        // AC lists sections in FILE order and includes straights (Brands:
+        // "Brabham Straight" split around the S/F line came first). Number
+        // by wrap-aware position from the start line, corners only.
+        if(globalSections){
+          var sorted=globalSections.slice().sort(function(x,y){ return x["in"]-y["in"]; });
+          var n=1;
+          sorted.forEach(function(sec){
+            if(/straight/i.test(sec.text||"")) { sec.turn=null; return; }
+            sec.turn=n++;
+          });
+        }
+        scheduleRender();
+      })
       .catch(function(){});
     // show primary by default, plus any laps named in ?show=
     toggleLap(primary, true);
@@ -891,6 +905,7 @@
       ctx.font="italic 700 10px 'Chakra Petch',sans-serif";
       ctx.textAlign="center"; ctx.textBaseline="middle";
       globalSections.forEach(function(sec, si){
+        if(sec.turn==null) return;   // straights are named, not numbered
         var s0=sec["in"], s1=sec.out;
         var mid = s1>=s0 ? (s0+s1)/2 : ((s0+s1+1)/2)%1;
         var best=0, bd=1e9;
@@ -899,7 +914,7 @@
           if(dd<bd){ bd=dd; best=mi; }
         }
         var mp=P(fdm.x[best], fdm.z[best]);
-        var lbl="T"+(si+1);
+        var lbl="T"+sec.turn;
         var tw2=ctx.measureText(lbl).width;
         ctx.fillStyle="rgba(10,10,11,0.78)";
         ctx.fillRect(mp[0]-tw2/2-4, mp[1]-20, tw2+8, 14);
@@ -912,7 +927,7 @@
         var sm=sampleAt(l.data,cursor); if(!sm) return;
         var p=P(sm.x,sm.z);
         ctx.fillStyle=l.color; ctx.strokeStyle="#000"; ctx.lineWidth=1;
-        ctx.beginPath(); ctx.arc(p[0],p[1], l===primary?4.5:3.5, 0,7); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(p[0],p[1], l===primary?6.5:5, 0,7); ctx.fill(); ctx.stroke();
       });
     }
   }
@@ -968,7 +983,7 @@
       for(var gi=0; gi<globalSections.length; gi++){
         var gs=globalSections[gi], g0=gs["in"], g1=gs.out;
         var inSec = g1>=g0 ? (cursor>=g0 && cursor<g1) : (cursor>=g0 || cursor<g1);
-        if(inSec){ cp.textContent += "  ·  " + (gs.text || ("T"+(gi+1))); break; }
+        if(inSec){ cp.textContent += "  ·  " + (gs.text || (gs.turn!=null?"T"+gs.turn:"")); break; }
       }
     }
     var html = "<thead><tr><th>Lap</th>";
