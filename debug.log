@@ -1,2 +1,0 @@
-acMain: start BUILD=minimal-update-v4 DIAG_TELEMETRY=True
-acMain: build ok
