@@ -994,7 +994,13 @@
         }
         r+="<td>"+gap+fmtSec(sp[i])+"</td>";
       }
-      r+="<td>"+fmtTime(l.rec.time_ms)+"</td>";
+      var tgap="";
+      if(l!==primary && primary && primary.rec){
+        var tv=(l.rec.time_ms-primary.rec.time_ms)/1000;
+        var tcol = tv<0 ? "var(--accent)" : (tv>0 ? "var(--danger)" : "var(--muted)");
+        tgap="<span style='font-size:10px;color:"+tcol+"'>("+(tv>=0?"+":"")+tv.toFixed(3)+")</span> ";
+      }
+      r+="<td>"+tgap+fmtTime(l.rec.time_ms)+"</td>";
       return r+"</tr>";
     }
     html+=rowFor(primary, ps);
