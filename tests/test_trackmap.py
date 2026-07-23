@@ -84,3 +84,64 @@ class TrackMapTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestSections(unittest.TestCase):
+    INI = u"""[HEADER]
+VERSION=1
+
+[SECTION_0]
+IN=0.02
+OUT=0.09
+TEXT=Paddock Hill Bend
+
+[SECTION_1]
+IN=0.18
+OUT=0.26
+TEXT=Druids
+
+[SECTION_2]
+IN=0.95
+OUT=0.03
+TEXT=Clark Curve
+"""
+
+    def test_parse(self):
+        d = tempfile.mkdtemp()
+        try:
+            p = os.path.join(d, "sections.ini")
+            io.open(p, "w", encoding="utf-8").write(self.INI)
+            secs = trackmap.parse_sections(p)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+        self.assertEqual(len(secs), 3)
+        self.assertEqual(secs[0]["text"], "Paddock Hill Bend")
+        self.assertAlmostEqual(secs[2]["in"], 0.95)
+        self.assertAlmostEqual(secs[2]["out"], 0.03)   # wraps the start line
+
+    def test_parse_missing_or_empty(self):
+        self.assertIsNone(trackmap.parse_sections("/nonexistent/sections.ini"))
+        d = tempfile.mkdtemp()
+        try:
+            p = os.path.join(d, "sections.ini")
+            io.open(p, "w", encoding="utf-8").write(u"[HEADER]\nVERSION=1\n")
+            self.assertIsNone(trackmap.parse_sections(p))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_grab_writes_json(self):
+        root = tempfile.mkdtemp()
+        data = tempfile.mkdtemp()
+        try:
+            dd = os.path.join(root, "content", "tracks", "spa", "gp", "data")
+            os.makedirs(dd)
+            io.open(os.path.join(dd, "sections.ini"), "w", encoding="utf-8").write(self.INI)
+            got = trackmap.grab_sections(root, "spa", "gp", data)
+            self.assertIsNotNone(got)
+            rel, path = got
+            self.assertEqual(rel, "trackmaps/spa__gp__sections.json")
+            j = json.load(open(path))
+            self.assertEqual(len(j["sections"]), 3)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+            shutil.rmtree(data, ignore_errors=True)

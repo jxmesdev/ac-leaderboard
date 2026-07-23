@@ -146,3 +146,70 @@ def grab_edges(ac_root, track, config, data_dir):
             return None
         return "trackmaps/" + name, dst
     return None
+
+
+def parse_sections(path):
+    """Parse a track's data/sections.ini (corner names): a list of
+    {"in": nsp, "out": nsp, "text": name} in file order, or None.
+    This is AC's own corner data -- nothing inferred."""
+    if not os.path.isfile(path):
+        return None
+    cur = None
+    out = []
+    try:
+        with io.open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if line.upper().startswith("[SECTION"):
+                    cur = {}
+                    out.append(cur)
+                    continue
+                if line.startswith("["):
+                    cur = None
+                    continue
+                if cur is None or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                k = k.strip().upper()
+                v = v.split(";")[0].strip()
+                if k == "IN" or k == "OUT":
+                    try:
+                        cur[k.lower()] = float(v)
+                    except ValueError:
+                        pass
+                elif k == "TEXT":
+                    cur["text"] = v
+    except (IOError, OSError):
+        return None
+    secs = [c for c in out
+            if "in" in c and "out" in c and 0.0 <= c["in"] <= 1.0
+            and 0.0 <= c["out"] <= 1.0]
+    return secs or None
+
+
+def grab_sections(ac_root, track, config, data_dir):
+    """Publish trackmaps/<slug>__sections.json from the track's sections.ini.
+    Returns (rel_url, written_path) or None."""
+    if not ac_root:
+        return None
+    base = os.path.join(ac_root, "content", "tracks", track)
+    cands = []
+    if config:
+        cands.append(os.path.join(base, config, "data", "sections.ini"))
+    cands.append(os.path.join(base, "data", "sections.ini"))
+    for ini in cands:
+        secs = parse_sections(ini)
+        if not secs:
+            continue
+        name = slug(track) + "__" + slug(config) + "__sections.json"
+        dst_dir = os.path.join(data_dir, "trackmaps")
+        if not os.path.isdir(dst_dir):
+            os.makedirs(dst_dir)
+        dst = os.path.join(dst_dir, name)
+        try:
+            with io.open(dst, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"sections": secs}, separators=(",", ":")))
+        except (IOError, OSError):
+            return None
+        return "trackmaps/" + name, dst
+    return None

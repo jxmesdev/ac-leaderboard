@@ -496,19 +496,35 @@ class LeaderboardApp(object):
         edge-building algorithm (ver < ailine.EDGES_VER)."""
         if not (self.track and self.cfg.repo_configured()):
             return
+        paths = []
         rel, path, ver = self._edges_state(self.track, self.track_config)
-        if ver >= ailine.EDGES_VER:
-            return
-        if ver:
-            log("edges: stored ver {0} < {1}, regenerating".format(
-                ver, ailine.EDGES_VER))
-        eg = self._grab_edges(self.track, self.track_config)
-        if eg is None:
-            log("edges: no usable fast_lane.ai for " + self.track)
-            return
-        log("edges: published " + eg[0])
-        if self.cfg.get("auto_push"):
-            self.git.request_push([eg[1]], "Track edges " + self.track)
+        if ver < ailine.EDGES_VER:
+            if ver:
+                log("edges: stored ver {0} < {1}, regenerating".format(
+                    ver, ailine.EDGES_VER))
+            eg = self._grab_edges(self.track, self.track_config)
+            if eg is None:
+                log("edges: no usable fast_lane.ai for " + self.track)
+            else:
+                log("edges: published " + eg[0])
+                paths.append(eg[1])
+        # Corner names/numbers straight from the track's data/sections.ini
+        # (AC's own data). Published once; tracks without the file just skip.
+        sname = telemetry.slug(self.track) + "__" + \
+            telemetry.slug(self.track_config) + "__sections.json"
+        if not os.path.isfile(os.path.join(self.cfg.data_dir, "trackmaps", sname)):
+            try:
+                ac_root = self.cfg.get("ac_root") or trackmap.find_ac_root(APP_DIR)
+                sg = trackmap.grab_sections(ac_root, self.track,
+                                            self.track_config, self.cfg.data_dir)
+            except Exception:
+                log("sections grab failed:\n" + traceback.format_exc())
+                sg = None
+            if sg is not None:
+                log("sections: published " + sg[0])
+                paths.append(sg[1])
+        if paths and self.cfg.get("auto_push"):
+            self.git.request_push(paths, "Track data " + self.track)
 
     def _grab_edges(self, track, cfg):
         """Best-effort TRUE track boundary from the track's ai/fast_lane.ai."""

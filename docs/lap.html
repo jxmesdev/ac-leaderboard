@@ -30,13 +30,15 @@
   a:hover { text-decoration:underline; }
   a.brand { display:block; }
   a.brand:hover { text-decoration:none; }
+  .back { display:inline-block; margin:-16px 0 14px; font:600 11px "Chakra Petch",sans-serif;
+    text-transform:uppercase; letter-spacing:1.2px; }
   .top { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
   h1 { font-size:20px; margin:0 0 2px; }
   #title { font:italic 600 20px "Chakra Petch", sans-serif; text-transform:uppercase; letter-spacing:.4px; }
   .sub { color:var(--muted); font-size:13px; }
   .grid { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; margin-top:16px; }
   @media (max-width:820px){ .grid { grid-template-columns:1fr; } }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:0; }
   .card h2 { font:600 11px "Chakra Petch", sans-serif; text-transform:uppercase; letter-spacing:1.2px;
     color:var(--muted); margin:0; padding:10px 14px; border-bottom:1px solid var(--line); }
   .mapwrap { padding:10px; position:relative; }
@@ -47,6 +49,10 @@
   .lap:hover { background:var(--panel2); }
   .lap input { margin:0; accent-color:var(--accent); }
   .swatch { width:12px; height:12px; border-radius:3px; flex:0 0 auto; }
+  input.swatch { width:16px; height:16px; padding:0; border:1px solid var(--line);
+    background:none; cursor:pointer; }
+  input.swatch::-webkit-color-swatch-wrapper { padding:0; }
+  input.swatch::-webkit-color-swatch { border:none; }
   .lap .nm { font-weight:600; }
   .lap .tm { margin-left:auto; font-variant-numeric:tabular-nums;
     font-family:ui-monospace,Menlo,monospace; color:var(--muted); }
@@ -87,6 +93,7 @@
     <h1>Bradford<span class="ln"> Leaderboard</span></h1>
     <p>Fastest valid laps per track &amp; car combination.</p>
   </a>
+  <a class="back" href="index.html">&#8592; Leaderboard</a>
   <div class="top">
     <div>
       <h1 id="title">Lap telemetry</h1>
@@ -127,7 +134,7 @@
 <script>
 (function () {
   "use strict";
-  var PALETTE = ["#b8ff00","#4fc3ff","#ff6ec7","#ffa726","#c792ff","#2ee6a8","#ff5252","#ffd54f","#8ab4ff","#64ffda"];
+  var PALETTE = ["#b8ff00","#00d0ff","#ff3d81","#ffb300","#a78bfa","#00e5a0","#ff5252","#f0f0f0","#4dd0e1","#f97316"];
   var CH = [
     {key:"thr",  label:"Throttle", unit:"%",    lo:0, hi:100},
     {key:"brk",  label:"Brake",    unit:"%",    lo:0, hi:100},
@@ -154,6 +161,8 @@
   var mapFitPending = false;   // drawMap should recompute cam for the focus
   var camAnim = null;          // {from, to, t0} camera fly-to animation
   var mapP = null;      // world->screen transform of the LAST drawMap (for map hover)
+  var domShown = [0,1]; // trace x-domain as DISPLAYED (animates on focus)
+  var domAnim = null;   // {from, to, t0}
 
   function pretty(id){ return (id||"").replace(/_/g," ").replace(/\b\w/g,function(c){return c.toUpperCase();}); }
   function fmtTime(ms){ if(ms==null) return "—"; var m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),mm=ms%1000;
@@ -165,6 +174,7 @@
   function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){
     return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
   var globalEdges=null;   // per-track true boundary, fetched by convention
+  var globalSections=null; // corner names/numbers from AC's sections.ini
   function comboMatch(r){ return norm(r.track)===want.track && norm(r.config||"")===want.config && norm(r.car)===want.car; }
   function getJSON(u){ return fetch(u,{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error(u+" "+r.status); return r.json(); }); }
   function fail(msg){ document.getElementById("subtitle").textContent="";
@@ -176,7 +186,11 @@
     roster.sort(function(a,b){ return (a.time_ms||1e12)-(b.time_ms||1e12); });
     if(!roster.length){ fail("No telemetry found for this track & car combination."); return; }
 
-    laps = roster.map(function(r,i){ return {rec:r, color:PALETTE[i%PALETTE.length], shown:false, data:null, loading:false}; });
+    laps = roster.map(function(r,i){
+      var c = PALETTE[i%PALETTE.length];
+      try { c = localStorage.getItem("aclc:"+r.telemetry) || c; } catch(err) {}
+      return {rec:r, color:c, shown:false, data:null, loading:false};
+    });
     // trophies: within the combo, each driver's own laps ranked by time
     // (roster is time-sorted, so per-driver encounter order == their rank)
     var perDriver = {};
@@ -206,6 +220,10 @@
             slugjs(primary.rec.config)+"__edges.json")
       .then(function(eg){ globalEdges=eg; scheduleRender(); })
       .catch(function(){});
+    getJSON("data/trackmaps/"+slugjs(primary.rec.track)+"__"+
+            slugjs(primary.rec.config)+"__sections.json")
+      .then(function(sc){ globalSections=sc.sections||null; scheduleRender(); })
+      .catch(function(){});
     // show primary by default
     toggleLap(primary, true);
   }).catch(function(e){ fail("Could not load leaderboard data. " + e.message); });
@@ -217,7 +235,14 @@
       var row=document.createElement("label"); row.className="lap";
       var cb=document.createElement("input"); cb.type="checkbox"; cb.checked=l.shown;
       cb.addEventListener("change",function(){ toggleLap(l, cb.checked); });
-      var sw=document.createElement("span"); sw.className="swatch"; sw.style.background=l.color;
+      var sw=document.createElement("input"); sw.type="color"; sw.className="swatch";
+      sw.value=l.color; sw.title="Lap colour";
+      sw.addEventListener("click", function(ev){ ev.stopPropagation(); });
+      sw.addEventListener("input", function(){
+        l.color=sw.value;
+        try { localStorage.setItem("aclc:"+l.rec.telemetry, l.color); } catch(err) {}
+        scheduleRender();
+      });
       var nm=document.createElement("span"); nm.className="nm";
       nm.textContent=(l.trophy? l.trophy+" ":"")+l.rec.user;
       var tm=document.createElement("span"); tm.className="tm"; tm.textContent=fmtTime(l.rec.time_ms);
@@ -269,8 +294,19 @@
   function render(){
     var sl=shownLaps();
     if(cursor==null && sl.length) cursor=0;   // default: start line
+    // trace x-domain flies to the focused sector in step with the map cam
+    if(domAnim){
+      var dk=Math.min(1, (performance.now()-domAnim.t0)/380);
+      var de=dk<0.5 ? 2*dk*dk : 1-Math.pow(-2*dk+2,2)/2;
+      domShown=[domAnim.from[0]+(domAnim.to[0]-domAnim.from[0])*de,
+                domAnim.from[1]+(domAnim.to[1]-domAnim.from[1])*de];
+      if(dk>=1){ domShown=domAnim.to.slice(); domAnim=null; }
+      else scheduleRender();
+    } else {
+      domShown = focus? [focus.d0, focus.d1] : [0,1];
+    }
     laps.forEach(function(l){
-      if(l._sw) l._sw.style.opacity = l.shown? "1":"0.35";
+      if(l._sw){ l._sw.style.opacity = l.shown? "1":"0.35"; if(l._sw.value!==l.color) l._sw.value=l.color; }
       if(l._cb) l._cb.checked = l.shown;
     });
     drawMap(sl);
@@ -307,7 +343,7 @@
 
   var PADL=42, PADR=10, PADT=8, PADB=18;
   // current x-domain of the traces (nsp units) — [0,1] or the focused sector
-  function traceDomain(){ return focus? [focus.d0, focus.d1] : [0,1]; }
+  function traceDomain(){ return domShown; }
   // ~n "nice" tick values covering [lo,hi]; integer=true forces whole steps
   function niceTicks(lo, hi, n, integer){
     var span=hi-lo; if(!(span>0)) return [lo];
@@ -594,6 +630,28 @@
       for(var i=0;i<n;i++){ var p=P(X[i],Z[i]); if(i===0)ctx.moveTo(p[0],p[1]); else ctx.lineTo(p[0],p[1]); }
       ctx.stroke(); ctx.globalAlpha=1;
     });
+    // turn numbers from AC's sections.ini (real data, published per track)
+    if(globalSections && primary && primary.data){
+      var fdm=primary.data;
+      ctx.font="italic 700 10px 'Chakra Petch',sans-serif";
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      globalSections.forEach(function(sec, si){
+        var s0=sec["in"], s1=sec.out;
+        var mid = s1>=s0 ? (s0+s1)/2 : ((s0+s1+1)/2)%1;
+        var best=0, bd=1e9;
+        for(var mi=0; mi<fdm.nsp.length; mi++){
+          var dd=Math.abs(fdm.nsp[mi]-mid); if(dd>0.5) dd=1-dd;
+          if(dd<bd){ bd=dd; best=mi; }
+        }
+        var mp=P(fdm.x[best], fdm.z[best]);
+        var lbl="T"+(si+1);
+        var tw2=ctx.measureText(lbl).width;
+        ctx.fillStyle="rgba(10,10,11,0.78)";
+        ctx.fillRect(mp[0]-tw2/2-4, mp[1]-20, tw2+8, 14);
+        ctx.fillStyle=css("--accent");
+        ctx.fillText(lbl, mp[0], mp[1]-13);
+      });
+    }
     if(cursor!=null){
       sl.forEach(function(l){
         var sm=sampleAt(l.data,cursor); if(!sm) return;
@@ -649,6 +707,13 @@
     if(cursor==null || !sl.length){ t.innerHTML=""; cp.textContent=""; return; }
     var len = primary && primary.data ? primary.data.track_len_m : 0;
     cp.textContent = len? ("· "+Math.round(cursor*len)+" m") : ("· "+Math.round(cursor*100)+"%");
+    if(globalSections){
+      for(var gi=0; gi<globalSections.length; gi++){
+        var gs=globalSections[gi], g0=gs["in"], g1=gs.out;
+        var inSec = g1>=g0 ? (cursor>=g0 && cursor<g1) : (cursor>=g0 || cursor<g1);
+        if(inSec){ cp.textContent += "  ·  " + (gs.text || ("T"+(gi+1))); break; }
+      }
+    }
     var cols = CH.map(function(c){ return c.label.slice(0,4); });
     var html = "<thead><tr><th>Lap</th>";
     CH.forEach(function(c){ html+="<th>"+c.label.slice(0,3)+"</th>"; });
@@ -696,13 +761,18 @@
     for(var k=0;k<sp.length;k++) _bounds.push([cuts[k], cuts[k+1]]);
     return _bounds;
   }
+  function startDomAnim(){
+    domAnim={from:[domShown[0], domShown[1]],
+             to: focus? [focus.d0, focus.d1] : [0,1],
+             t0: performance.now()};
+  }
   function focusSector(i){
     var b=sectorBounds(); if(!b || !b[i]) return;
     focus={i:i, d0:b[i][0], d1:b[i][1]};
-    mapFitPending=true; secSig=""; scheduleRender();
+    startDomAnim(); mapFitPending=true; secSig=""; scheduleRender();
   }
   function focusAll(){
-    focus=null; mapFitPending=true; secSig=""; scheduleRender();
+    focus=null; startDomAnim(); mapFitPending=true; secSig=""; scheduleRender();
   }
   var secSig="";
   // fill a container with [S1]..[Sn][All] focus buttons reflecting `focus`;
