@@ -54,7 +54,7 @@ def _drive_lap(rec, seconds, fps=60.0, base_x=0.0):
         brake = 0.0 if gas > 0 else 0.8
         speed = 180.0 if gas > 0 else 90.0
         gear = 4
-        steer = 0.2 * math.sin(frac * 8 * math.pi)  # radians
+        steer = 12.0 * math.sin(frac * 8 * math.pi)  # wheel degrees
         rec.tick(dt, nsp, gas, brake, speed, gear, steer, x, z)
 
 

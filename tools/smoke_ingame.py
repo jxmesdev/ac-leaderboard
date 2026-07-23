@@ -108,7 +108,7 @@ def drive_lap(seconds=5.0, fps=60.0):
         mock_ac.STATE.brake = 0.0 if mock_ac.STATE.gas > 0 else 0.85
         mock_ac.STATE.speed_kmh = 190.0 if mock_ac.STATE.gas > 0 else 95.0
         mock_ac.STATE.gear = 5 if mock_ac.STATE.gas > 0 else 3
-        mock_ac.STATE.steer = 0.25 * math.sin(frac * 10 * math.pi)
+        mock_ac.STATE.steer = 15.0 * math.sin(frac * 10 * math.pi)   # degrees
         mock_ac.STATE.world = (120.0 * math.cos(frac * 2 * math.pi),
                                0.0,
                                80.0 * math.sin(frac * 2 * math.pi))

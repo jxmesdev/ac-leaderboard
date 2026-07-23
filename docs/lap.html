@@ -23,9 +23,9 @@
     text-transform:uppercase; letter-spacing:.5px; color:var(--text); }
   .brand h1::before { content:"//"; color:var(--accent); margin-right:10px; }
   .brand h1 .ln { color:var(--accent); }
-  .brand p { margin:0 0 30px; color:var(--muted); font-size:12px;
+  .brand p { margin:0 0 60px; color:var(--muted); font-size:12px;
     text-transform:uppercase; letter-spacing:2px; }
-  .wrap { max-width:1100px; margin:0 auto; padding:28px 16px 60px; }
+  .wrap { max-width:1100px; margin:0 auto; padding:40px 16px 60px; }
   a { color:var(--accent); text-decoration:none; }
   a:hover { text-decoration:underline; }
   a.brand { display:block; }
@@ -49,10 +49,11 @@
   .lap:hover { background:var(--panel2); }
   .lap input { margin:0; accent-color:var(--accent); }
   .swatch { width:12px; height:12px; border-radius:3px; flex:0 0 auto; }
-  input.swatch { width:16px; height:16px; padding:0; border:1px solid var(--line);
-    background:none; cursor:pointer; }
+  input.swatch { -webkit-appearance:none; appearance:none; width:16px; height:16px;
+    padding:0; border:1px solid var(--line); background:var(--panel2); cursor:pointer; }
   input.swatch::-webkit-color-swatch-wrapper { padding:0; }
   input.swatch::-webkit-color-swatch { border:none; }
+  input.swatch::-moz-color-swatch { border:none; }
   .lap .nm { font-weight:600; }
   .lap .tm { margin-left:auto; font-variant-numeric:tabular-nums;
     font-family:ui-monospace,Menlo,monospace; color:var(--muted); }
@@ -68,6 +69,8 @@
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
   .hint { color:var(--muted); font-size:12px; padding:0 14px 12px; }
   canvas.trace { width:100%; display:block; touch-action:none; }
+  .tracetitle { font:600 11px "Chakra Petch",sans-serif; text-transform:uppercase;
+    letter-spacing:1px; color:var(--muted); padding:10px 8px 2px 46px; }
   .empty { padding:40px; text-align:center; color:var(--muted); }
   .sectors { margin-top:16px; }
   .secbody { padding:10px 14px 12px; }
@@ -84,7 +87,12 @@
     font-family:"Titillium Web",-apple-system,sans-serif; }
   .sectable thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
+  footer { margin-top:40px; color:var(--muted); font-size:11px; text-align:center;
+    font-family:"Chakra Petch",sans-serif; text-transform:uppercase; letter-spacing:1.2px; }
+  footer .fbrand { color:var(--accent); }
   .secmuted { color:var(--muted); font-size:12px; }
+  .readout .swatch, .sectable .swatch { vertical-align:middle; margin-top:-2px; }
+  .readout td:first-child, .sectable td:first-child { vertical-align:middle; }
 </style>
 </head>
 <body>
@@ -129,6 +137,8 @@
   </div>
 
   <div id="error" class="empty" style="display:none"></div>
+
+  <footer><span class="fbrand">//</span> Bradford Leaderboard &nbsp;·&nbsp; Assetto Corsa lap telemetry</footer>
 </div>
 
 <script>
@@ -277,9 +287,11 @@
     var host=document.getElementById("traces"); host.innerHTML="";
     var h=document.createElement("h2"); h.textContent="Traces"; host.appendChild(h);
     CH.forEach(function(ch){
-      var wrap=document.createElement("div"); wrap.style.padding="4px 8px";
+      var wrap=document.createElement("div"); wrap.style.padding="0 8px 4px";
+      var tt=document.createElement("div"); tt.className="tracetitle";
+      tt.textContent=ch.label+(ch.unit?(" ("+ch.unit+")"):"");
       var cv=document.createElement("canvas"); cv.className="trace"; cv.dataset.key=ch.key;
-      wrap.appendChild(cv); host.appendChild(wrap);
+      wrap.appendChild(tt); wrap.appendChild(cv); host.appendChild(wrap);
       traceCanvases.push({ch:ch, cv:cv});
     });
     attachHover();
@@ -306,7 +318,7 @@
       domShown = focus? [focus.d0, focus.d1] : [0,1];
     }
     laps.forEach(function(l){
-      if(l._sw){ l._sw.style.opacity = l.shown? "1":"0.35"; if(l._sw.value!==l.color) l._sw.value=l.color; }
+      if(l._sw && l._sw.value!==l.color) l._sw.value=l.color;
       if(l._cb) l._cb.checked = l.shown;
     });
     drawMap(sl);
@@ -363,9 +375,6 @@
     // frame + label
     ctx.strokeStyle=linec; ctx.lineWidth=1;
     ctx.strokeRect(PADL, PADT, plotW, plotH);
-    ctx.fillStyle=muted; ctx.font="11px -apple-system,sans-serif";
-    ctx.textBaseline="top"; ctx.textAlign="left";
-    ctx.fillText(ch.label+(ch.unit?(" ("+ch.unit+")"):""), PADL+4, PADT+3);
     if(!sl.length){ return; }
     var rg=chRange(ch, sl), lo=rg[0], hi=rg[1];
     var dom=traceDomain(), dspan=(dom[1]-dom[0])||1;
@@ -414,8 +423,7 @@
         rows.forEach(function(r0){ tw=Math.max(tw, ctx.measureText(r0.txt).width); });
         var bw=tw+26, bh=rows.length*16+8;
         var bx=cx+10; if(bx+bw>PADL+plotW-4) bx=cx-10-bw;
-        // drop below the channel label when the box would cover it
-        var by=(bx<PADL+150)? PADT+22 : PADT+6;
+        var by=PADT+6;
         ctx.globalAlpha=0.92; ctx.fillStyle=css("--panel2");
         ctx.fillRect(bx,by,bw,bh);
         ctx.globalAlpha=1; ctx.strokeStyle=linec; ctx.strokeRect(bx,by,bw,bh);
@@ -823,11 +831,13 @@
         "'></span> "+(l.trophy? l.trophy+" ":"")+esc(l.rec.user)+"</td>";
       for(var i=0;i<ps.length;i++){
         if(i>=sp.length){ r+="<td></td>"; continue; }
-        var col="";
+        var col="", gap="";
         if(l!==primary){
           if(sp[i]<ps[i]) col="color:var(--accent)"; else if(sp[i]>ps[i]) col="color:var(--danger)";
+          var gv=(sp[i]-ps[i])/1000;
+          gap=" <span style='font-size:10px;opacity:.7'>("+(gv>=0?"+":"")+gv.toFixed(3)+")</span>";
         }
-        r+="<td style='"+col+"'>"+fmtSec(sp[i])+"</td>";
+        r+="<td style='"+col+"'>"+fmtSec(sp[i])+gap+"</td>";
       }
       return r+"</tr>";
     }

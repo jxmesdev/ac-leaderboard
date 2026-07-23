@@ -12,8 +12,6 @@ import json
 import os
 import re
 
-RAD_TO_DEG = 57.295779513
-
 # Per-sample channels stored, in columnar form.
 CHANNELS = ("nsp", "t", "thr", "brk", "spd", "gear", "str", "x", "z")
 
@@ -59,7 +57,7 @@ class LapRecorder(object):
         self._lap_t = 0.0                 # elapsed time this lap (s)
 
     # -- feeding ----------------------------------------------------------
-    def tick(self, dt, nsp, gas, brake, speed_kmh, gear, steer_rad, x, z):
+    def tick(self, dt, nsp, gas, brake, speed_kmh, gear, steer_deg, x, z):
         """Feed one frame of telemetry. Safe to call every frame."""
         if nsp is None:
             return
@@ -90,7 +88,9 @@ class LapRecorder(object):
         cur["brk"].append(_clamp_pct(_f(brake) * 100.0))
         cur["spd"].append(round(speed_kmh, 1))
         cur["gear"].append(int(_f(gear)))
-        cur["str"].append(round(_f(steer_rad) * RAD_TO_DEG, 1))
+        # acsys.CS.Steer is already steering-wheel DEGREES (verified on
+        # real data: converting as radians inflated the channel ~57x).
+        cur["str"].append(round(_f(steer_deg), 1))
         cur["x"].append(round(_f(x), 1))
         cur["z"].append(round(_f(z), 1))
 

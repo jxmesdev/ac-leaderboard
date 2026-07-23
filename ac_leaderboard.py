@@ -670,7 +670,7 @@ class LeaderboardApp(object):
         x, z = ac_data.get_world_xz()
         self.recorder.tick(dt, nsp, ac_data.get_gas(), ac_data.get_brake(),
                            ac_data.get_speed_kmh(), ac_data.get_gear(),
-                           ac_data.get_steer_rad(), x, z)
+                           ac_data.get_steer_deg(), x, z)
 
     def _combo_name(self, track, cfg):
         if not track:

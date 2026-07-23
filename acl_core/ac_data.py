@@ -108,7 +108,8 @@ def get_gear():
     return _car_state_int(acsys.CS.Gear) if _HAVE_AC else 0
 
 
-def get_steer_rad():
+def get_steer_deg():
+    """Steering wheel rotation in DEGREES (acsys.CS.Steer is degrees)."""
     return _car_state_float(acsys.CS.Steer) if _HAVE_AC else 0.0
 
 
