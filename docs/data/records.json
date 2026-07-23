@@ -68,5 +68,19 @@
     "time_ms": 54201, 
     "track": "ks_brands_hatch", 
     "user": "Test"
+  }, 
+  {
+    "car": "ks_mazda_mx5_cup", 
+    "config": "indy", 
+    "date": "2026-07-23T23:03:49Z", 
+    "source": "auto", 
+    "splits": [
+      32071, 
+      22757
+    ], 
+    "telemetry": "telemetry/ks_brands_hatch__indy__ks_mazda_mx5_cup__test__54828.json", 
+    "time_ms": 54828, 
+    "track": "ks_brands_hatch", 
+    "user": "Test"
   }
 ]
