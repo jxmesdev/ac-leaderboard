@@ -26,16 +26,6 @@ from acl_core.timefmt import format_ms
 
 APP_NAME = "AC Leaderboard"
 
-# Diagnostic build markers. BUILD is written to debug.log so we always know which
-# version produced a given log. DIAG_TELEMETRY=False disables per-frame sampling.
-BUILD = "minimal-build-v5"
-DIAG_TELEMETRY = True
-# When True, acUpdate does NOTHING except apply a typed driver name.
-DIAG_MINIMAL_UPDATE = True
-# When True, build() creates ONLY the window + label + text field (no driver
-# grid, no leaderboard, no other buttons) -- like the isolated test that worked.
-DIAG_MINIMAL_BUILD = True
-
 # Layout constants (pixels).
 WIN_W = 380
 MARGIN = 10
@@ -148,14 +138,6 @@ class LeaderboardApp(object):
             ac.drawBorder(self.window, 0)
         except Exception:
             pass
-
-        if DIAG_MINIMAL_BUILD:
-            # Only a label + text field, like the isolated test that worked.
-            self._label("New driver (type + Enter):", MARGIN, 34, 12)
-            self.in_newuser = self._text_input(MARGIN, 56, WIN_W - 2 * MARGIN, 22,
-                                               self._make_validate_cb())
-            dbg("build ok (MINIMAL: field only)")
-            return self
 
         y = 32
         self.l_track = self._label("Track: -", MARGIN, y, 13)
@@ -481,10 +463,6 @@ class LeaderboardApp(object):
                 self._set(self.in_newuser, "")
             log("update: pending handled")
 
-        if DIAG_MINIMAL_UPDATE:
-            # Inert: no telemetry, no git mirror, no per-0.5s ac.* reads.
-            return
-
         # Mirror git status to the log from the MAIN thread (the worker thread
         # must never call ac.*). Cheap string compare each frame.
         if self.git.last_status != self._last_git_log:
@@ -495,7 +473,7 @@ class LeaderboardApp(object):
         # at the slow cadence below, so while parked/typing there are ZERO
         # per-frame ac.* reads on the input path (belt-and-braces robustness;
         # you never type while driving anyway).
-        if DIAG_TELEMETRY and self._moving and self.record_telemetry \
+        if self._moving and self.record_telemetry \
                 and self.auto_capture and self.track and self.car:
             self._sample_telemetry(dt)
 
@@ -574,7 +552,7 @@ _app = None
 def acMain(ac_version):
     global _app
     dbg_reset()
-    dbg("acMain: start BUILD=" + BUILD + " DIAG_TELEMETRY=" + str(DIAG_TELEMETRY))
+    dbg("acMain: start")
     try:
         _app = LeaderboardApp().build()
         dbg("acMain: build ok")

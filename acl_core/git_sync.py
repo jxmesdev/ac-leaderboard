@@ -108,6 +108,21 @@ class GitSync(object):
             if rc != 0:
                 return False, ("git commit failed: " + (err or out)).strip()
 
+        # Integrate any remote commits BEFORE pushing so a divergence (e.g. new
+        # code pushed from the dev PC while the rig recorded a lap) self-heals
+        # instead of getting rejected. --autostash tucks away any stray working
+        # changes (untracked files are left alone); --rebase keeps history linear.
+        self._dbg("pull --rebase start")
+        rc, out, err = self._run([
+            "-c", "rebase.autoStash=true",
+            "pull", "--rebase", self.remote, self.branch,
+        ])
+        self._dbg("pull --rebase rc=" + str(rc))
+        if rc != 0:
+            # Don't leave the tree mid-rebase if it hit a real conflict.
+            self._run(["rebase", "--abort"])
+            return False, ("git pull --rebase failed: " + (err or out)).strip()
+
         self._dbg("push start")
         rc, out, err = self._run(["push", self.remote, "HEAD:" + self.branch])
         self._dbg("push rc=" + str(rc))

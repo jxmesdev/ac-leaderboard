@@ -15,3 +15,7 @@ _localdata/
 
 # Assetto Corsa crash reports (may contain a memory dump + your username)
 *.dmp
+*.report
+
+# App breadcrumb log (local diagnostics only; never pushed)
+debug.log
