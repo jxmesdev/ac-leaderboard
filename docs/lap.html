@@ -90,14 +90,16 @@
   .sectable thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
   .setuptable { border-collapse:collapse; font-size:12px; }
-  .setuptable th, .setuptable td { text-align:right; padding:3px 0 3px 34px;
+  .setuptable th, .setuptable td { text-align:right; padding:4px 10px 4px 34px;
     font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; }
   .setuptable td.diff { color:#ffd60a; }
-  .setuptable th:first-child, .setuptable td:first-child { text-align:left; padding-left:0;
+  .setuptable th:first-child, .setuptable td:first-child { text-align:left; padding-left:10px;
     font-family:"Titillium Web",-apple-system,sans-serif; color:var(--muted); }
   .setuptable thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
   .setuptable tbody tr:hover td { background:var(--panel2); }
+  .setuptable tbody tr:hover td:first-child { border-radius:6px 0 0 6px; }
+  .setuptable tbody tr:hover td:last-child { border-radius:0 6px 6px 0; }
   .setuptable button.dlbtn { background:var(--panel2); color:var(--text);
     border:1px solid var(--line); padding:2px 8px; font:600 10px "Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.5px; cursor:pointer; }
