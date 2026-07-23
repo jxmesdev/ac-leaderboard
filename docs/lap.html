@@ -98,6 +98,7 @@
   .card.collapsed > h2.tgl::after {
     transform:translateY(-50%) scaleY(1) rotate(45deg); }   /* chevron down */
   .card.collapsed > *:not(h2) { display:none !important; }
+  .card.anim { transition:height .25s ease; overflow:hidden; }
   .sectors { margin-top:16px; }
   .secbody { padding:10px 14px 12px; }
   .secbtns { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
@@ -467,8 +468,32 @@
     if(!h || h.classList.contains("tgl")) return;
     h.classList.add("tgl");
     h.addEventListener("click", function(){
-      card.classList.toggle("collapsed");
-      scheduleRender();   // canvases sized 0 while hidden: redraw on expand
+      if(card._animT){ clearTimeout(card._animT); }
+      var hH = h.offsetHeight;
+      card.classList.add("anim");
+      if(!card.classList.contains("collapsed")){
+        // collapse: animate current height down to just the header
+        card.style.height = card.offsetHeight + "px";
+        void card.offsetHeight;                    // commit start height
+        card.style.height = hH + "px";
+        card._animT = setTimeout(function(){
+          card.classList.add("collapsed");
+          card.classList.remove("anim");
+          card.style.height = ""; card._animT = null;
+        }, 260);
+      } else {
+        // expand: reveal content, then animate header-height -> full height
+        card.classList.remove("collapsed");
+        var target = card.scrollHeight;
+        card.style.height = hH + "px";
+        void card.offsetHeight;
+        card.style.height = target + "px";
+        card._animT = setTimeout(function(){
+          card.classList.remove("anim");
+          card.style.height = ""; card._animT = null;
+          scheduleRender();   // canvases sized 0 while hidden: redraw now
+        }, 260);
+      }
     });
   }
 
