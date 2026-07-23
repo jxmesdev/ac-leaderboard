@@ -8,6 +8,7 @@
 # This file is the thin "glue" between AC's `ac`/`acsys` API and the
 # pure-Python logic in the acl_core package (which is unit-tested off-car).
 
+import json
 import os
 import sys
 import traceback
@@ -19,7 +20,7 @@ if APP_DIR not in sys.path:
 
 import ac  # provided by Assetto Corsa
 
-from acl_core import ac_data, config, storage, telemetry, trackmap
+from acl_core import ac_data, ailine, config, storage, telemetry, trackmap
 from acl_core.git_sync import GitSync
 from acl_core.leaderboard import leaderboard_for
 from acl_core.timefmt import format_ms
@@ -405,10 +406,16 @@ class LeaderboardApp(object):
             if tm is not None:
                 payload["trackmap"] = tm[0]
                 extra.append(tm[1])
-            eg = self._grab_edges(track, cfg)
-            if eg is not None:
-                payload["edges_url"] = eg[0]
-                extra.append(eg[1])
+            # Reference the published edges file; only (re)build it if it is
+            # missing or predates the current algorithm -- never on every PB.
+            rel, path, ver = self._edges_state(track, cfg)
+            if ver >= ailine.EDGES_VER:
+                payload["edges_url"] = rel
+            else:
+                eg = self._grab_edges(track, cfg)
+                if eg is not None:
+                    payload["edges_url"] = eg[0]
+                    extra.append(eg[1])
             relpath = telemetry.write_telemetry(self.cfg.data_dir, payload)
         except Exception:
             log("telemetry write failed:\n" + traceback.format_exc())
@@ -418,16 +425,35 @@ class LeaderboardApp(object):
             stored["telemetry"] = relpath
         return [os.path.join(self.cfg.data_dir, relpath)] + extra
 
+    def _edges_state(self, track, cfg):
+        """(rel_url, abs_path, stored_ver) for this track's edges file.
+        stored_ver is 0 when the file is missing or unreadable."""
+        name = telemetry.slug(track) + "__" + telemetry.slug(cfg) + \
+            "__edges.json"
+        path = os.path.join(self.cfg.data_dir, "trackmaps", name)
+        ver = 0
+        if os.path.isfile(path):
+            try:
+                with open(path) as f:
+                    ver = int(json.load(f).get("ver") or 0)
+            except Exception:
+                ver = 0
+        return "trackmaps/" + name, path, ver
+
     def _publish_edges(self):
         """Grab + push this track's true-boundary file as soon as the track is
         known (session load), not just on a PB -- so laps already on the site
-        get accurate edges after a mere refresh. No-op once the file exists."""
+        get accurate edges after a mere refresh. No-op once an up-to-date
+        file exists; regenerates when the stored file predates the current
+        edge-building algorithm (ver < ailine.EDGES_VER)."""
         if not (self.track and self.cfg.repo_configured()):
             return
-        name = telemetry.slug(self.track) + "__" + \
-            telemetry.slug(self.track_config) + "__edges.json"
-        if os.path.isfile(os.path.join(self.cfg.data_dir, "trackmaps", name)):
+        rel, path, ver = self._edges_state(self.track, self.track_config)
+        if ver >= ailine.EDGES_VER:
             return
+        if ver:
+            log("edges: stored ver {0} < {1}, regenerating".format(
+                ver, ailine.EDGES_VER))
         eg = self._grab_edges(self.track, self.track_config)
         if eg is None:
             log("edges: no usable fast_lane.ai for " + self.track)

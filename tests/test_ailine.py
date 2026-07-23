@@ -91,6 +91,92 @@ class TestEdges(unittest.TestCase):
         self.assertTrue(150 < len(edges["lx"]) < 260, len(edges["lx"]))
 
 
+def make_apex_hugging_ai(n=2000, R=100.0, half_w=5.5, left_is_outer=True):
+    """Racing line on a circle that hugs the inside through 'corners' --
+    the physical behaviour detect_left_sign votes on. CCW travel, so the
+    driver's-left (up x forward) direction points OUTWARD."""
+    xs, zs, sl, sr = [], [], [], []
+    for i in range(n):
+        a = 2 * math.pi * i / n
+        hug = -2.0 - 1.5 * abs(math.sin(4 * a))   # always inside of centre
+        r = R + hug
+        xs.append(r * math.cos(a))
+        zs.append(r * math.sin(a))
+        outer, inner = (R + half_w) - r, r - (R - half_w)
+        if left_is_outer:
+            sl.append(outer)
+            sr.append(inner)
+        else:
+            sl.append(inner)
+            sr.append(outer)
+    return {"x": xs, "z": zs, "side_l": sl, "side_r": sr}
+
+
+class TestSignDetection(unittest.TestCase):
+    def test_detects_left_outward_labeling(self):
+        ai = make_apex_hugging_ai(left_is_outer=True)
+        # CCW: driver's left = outward = (tz, -tx) = sign -1 in our lat basis
+        self.assertEqual(ailine.detect_left_sign(ai), -1)
+
+    def test_detects_flipped_labeling(self):
+        ai = make_apex_hugging_ai(left_is_outer=False)
+        self.assertEqual(ailine.detect_left_sign(ai), 1)
+
+    def test_band_correct_under_both_labelings(self):
+        # Whatever the file's labeling, the band must land on the true track.
+        for flag in (True, False):
+            ai = make_apex_hugging_ai(left_is_outer=flag)
+            e = ailine.build_edges(ai)
+            radii = sorted([
+                sum(math.hypot(x, z) for x, z in zip(e["lx"], e["lz"])) / len(e["lx"]),
+                sum(math.hypot(x, z) for x, z in zip(e["rx"], e["rz"])) / len(e["rx"]),
+            ])
+            self.assertAlmostEqual(radii[0], 94.5, delta=0.6)
+            self.assertAlmostEqual(radii[1], 105.5, delta=0.6)
+
+
+class TestInvalidSideGaps(unittest.TestCase):
+    def test_zeroed_runs_do_not_pinch_the_band(self):
+        ai = make_apex_hugging_ai()
+        n = len(ai["x"])
+        # zero out ~30% of samples in runs (the parser's invalid sentinel)
+        for start in range(0, n, 200):
+            for i in range(start, min(start + 60, n)):
+                ai["side_l"][i] = 0.0
+                ai["side_r"][i] = 0.0
+        e = ailine.build_edges(ai)
+        self.assertIsNotNone(e)
+        # band half-width must stay near 5.5m everywhere -- never pinched
+        m = min(len(e["lx"]), len(e["rx"]))
+        widths = [math.hypot(e["lx"][k]-e["rx"][k], e["lz"][k]-e["rz"][k]) / 2.0
+                  for k in range(m)]
+        self.assertGreater(min(widths), 4.5, "band pinched to %.2f m" % min(widths))
+        self.assertLess(max(widths), 6.5)
+        radii = sorted([
+            sum(math.hypot(x, z) for x, z in zip(e["lx"], e["lz"])) / len(e["lx"]),
+            sum(math.hypot(x, z) for x, z in zip(e["rx"], e["rz"])) / len(e["rx"]),
+        ])
+        self.assertAlmostEqual(radii[0], 94.5, delta=0.7)
+        self.assertAlmostEqual(radii[1], 105.5, delta=0.7)
+
+
+class TestDecimation(unittest.TestCase):
+    def test_dense_spline_is_thinned_and_fast(self):
+        import time
+        ai = make_apex_hugging_ai(n=60000)   # ~1cm spacing: pathological
+        t0 = time.time()
+        e = ailine.build_edges(ai)
+        took = time.time() - t0
+        self.assertIsNotNone(e)
+        self.assertLess(took, 5.0, "build_edges too slow: %.1fs" % took)
+        radii = sorted([
+            sum(math.hypot(x, z) for x, z in zip(e["lx"], e["lz"])) / len(e["lx"]),
+            sum(math.hypot(x, z) for x, z in zip(e["rx"], e["rz"])) / len(e["rx"]),
+        ])
+        self.assertAlmostEqual(radii[0], 94.5, delta=0.6)
+        self.assertAlmostEqual(radii[1], 105.5, delta=0.6)
+
+
 class TestGrabEdges(unittest.TestCase):
     def test_grab_writes_json(self):
         root = tempfile.mkdtemp()
