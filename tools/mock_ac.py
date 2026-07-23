@@ -18,6 +18,8 @@ class _State(object):
         self.driver_name = "TestDriver"
         self.best_lap = 0
         self.last_lap = 0
+        self.lap_count = 0
+        self.lap_invalidated = 0
         self.logs = []
         # live telemetry channels
         self.gas = 0.0
@@ -126,6 +128,10 @@ def getCarState(car_id, which, *rest):
         return STATE.best_lap
     if which == _CS.LastLap:
         return STATE.last_lap
+    if which == _CS.LapCount:
+        return STATE.lap_count
+    if which == _CS.LapInvalidated:
+        return STATE.lap_invalidated
     if which == _CS.Gas:
         return STATE.gas
     if which == _CS.Brake:
@@ -157,6 +163,7 @@ class _CS(object):
     LastLap = "LastLap"
     BestLap = "BestLap"
     LapCount = "LapCount"
+    LapInvalidated = "LapInvalidated"
     NormalizedSplinePosition = "NSP"
     Gas = "Gas"
     Brake = "Brake"

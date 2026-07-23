@@ -126,8 +126,8 @@ def get_world_xz():
 def get_best_lap_ms():
     """Best VALID lap of the current session in ms (0 if none yet).
 
-    AC only records a BestLap for laps that were not invalidated (off-track,
-    cutting, etc.), which is exactly what we want for a clean leaderboard.
+    NOTE: this is AC's SESSION best -- shared across driver swaps on one rig,
+    so the leaderboard no longer uses it for capture. Kept for reference.
     """
     if not _HAVE_AC:
         return 0
@@ -135,6 +135,30 @@ def get_best_lap_ms():
 
 
 def get_last_lap_ms():
+    """Time of the most recently COMPLETED lap in ms (0 if none). Unlike
+    BestLap this reports every lap, so each completed lap can be judged
+    against the current driver's own record."""
     if not _HAVE_AC:
         return 0
     return _car_state_int(acsys.CS.LastLap)
+
+
+def get_lap_count():
+    """Completed-lap count for the session (0 at the start)."""
+    if not _HAVE_AC:
+        return 0
+    return _car_state_int(acsys.CS.LapCount)
+
+
+def get_lap_invalidated():
+    """True if the CURRENT lap has been invalidated (cut/off-track).
+
+    Falls back to False if this build's acsys lacks the enum, in which case
+    every completed lap counts.
+    """
+    if not _HAVE_AC:
+        return False
+    which = getattr(acsys.CS, "LapInvalidated", None)
+    if which is None:
+        return False
+    return _car_state_int(which) != 0

@@ -3,10 +3,12 @@
 # Python 3.3 compatible. Pure file I/O -- no `ac` import, so it is unit-testable.
 #
 # AC world position -> map.png pixel (per AC's own Track Map apps):
-#     px = worldX * SCALE_FACTOR + X_OFFSET
-#     py = worldZ * SCALE_FACTOR + Z_OFFSET
-# The viewer stores {scale, xoff, zoff} and applies the same formula to the
+#     px = (worldX + X_OFFSET) / SCALE_FACTOR
+#     py = (worldZ + Z_OFFSET) / SCALE_FACTOR
+# The viewer stores {scale, xoff, zoff} and applies this formula to the
 # recorded x/z, so the line sits on the track regardless of overall orientation.
+# NB: map.ini WIDTH/HEIGHT are informational floats, NOT the PNG's raster size;
+# the viewer must draw the image at its natural pixel size.
 
 import io
 import os

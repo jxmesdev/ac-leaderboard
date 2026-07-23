@@ -115,8 +115,10 @@ drive_lap(5.0)
 # ...cross start/finish so the recorder finalizes the lap...
 mock_ac.STATE.nsp = 0.0
 app.acUpdate(1 / 60.0)
-# ...then AC reports it as the new best -> save record + flush telemetry.
-mock_ac.STATE.best_lap = 81200
+# ...then AC's lap counter ticks over with the completed lap's time ->
+# save record + flush telemetry (judged against James's OWN record).
+mock_ac.STATE.lap_count += 1
+mock_ac.STATE.last_lap = 81200
 for _ in range(40):
     app.acUpdate(1 / 60.0)
 dump("after driven PB 1:21.200")

@@ -24,7 +24,7 @@ from acl_core.git_sync import GitSync
 from acl_core.leaderboard import leaderboard_for
 from acl_core.timefmt import format_ms
 
-APP_NAME = "AC Leaderboard"
+APP_NAME = "Bradford Leaderboard"
 
 # Layout constants (pixels).
 WIN_W = 380
@@ -81,7 +81,6 @@ def log(msg):
 # =============================================================================
 _typed_name = None
 _pending_pick = None
-_auto_clicked = False
 
 
 def _on_validate_typed(value):
@@ -128,19 +127,6 @@ def _consume_pick():
     return v
 
 
-def _on_auto_clicked(x, y):
-    global _auto_clicked
-    _auto_clicked = True
-    dbg("auto toggle fired")
-
-
-def _consume_auto_clicked():
-    global _auto_clicked
-    v = _auto_clicked
-    _auto_clicked = False
-    return v
-
-
 class LeaderboardApp(object):
     def __init__(self):
         self.window = None
@@ -164,8 +150,11 @@ class LeaderboardApp(object):
         self.car = ""
         self.users = self.store.all_users()
         self.selected = None           # display name of active driver
-        self.last_seen_best = 0        # for auto-capture edge detection
-        self.auto_capture = bool(self.cfg.get("auto_capture"))
+        # Per-lap capture: LapCount edge detection + validity of the lap in
+        # progress. Each COMPLETED valid lap is judged against the current
+        # driver's OWN record (never AC's shared session best).
+        self._lap_count = None         # None until the first slow tick baselines it
+        self._lap_invalid = False
         self.status_text = ""
         self.status_error = False
         self._accum = 0.0
@@ -186,7 +175,6 @@ class LeaderboardApp(object):
         self.driver_btn_pos = []       # each button's on-screen (x, y)
         self.in_newuser = None
         self.l_status = None
-        self.b_auto = None
         self.row_pos = []
         self.row_user = []
         self.row_time = []
@@ -246,13 +234,9 @@ class LeaderboardApp(object):
                                            _on_validate_typed)
         y += 28
 
-        # Status line (above the auto-capture button; red when it's an error).
+        # Status line (red when it's an error).
         self.l_status = self._label("", MARGIN, y, 12)
         y += 22
-
-        self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
-                                   _on_auto_clicked)
-        y += 28
 
         # Leaderboard header + rows (4 aligned columns).
         self._label("#", self.cx_pos, y, 13)
@@ -324,9 +308,8 @@ class LeaderboardApp(object):
         if index < 0 or index >= len(self.users):
             return
         self.selected = self.users[index]
-        # NB: last_seen_best is NOT reset -- a lap driven before this switch is
-        # never credited to the newly picked driver. Only a best set AFTER
-        # selection (i.e. beating the session best) records.
+        # Laps are attributed on completion to whoever is selected at that
+        # moment, judged against their OWN record only.
         self._render_driver_grid()
         self._refresh_board()
         self._set_status("driver: " + self.selected)
@@ -379,7 +362,6 @@ class LeaderboardApp(object):
         self.store.add_user(name)
         self.users = self.store.all_users()
         self.selected = name
-        # last_seen_best NOT reset (see on_pick): earlier laps stay unattributed.
         self._render_driver_grid()
         self._refresh_board()
         self.store.save()
@@ -440,14 +422,6 @@ class LeaderboardApp(object):
         except Exception:
             log("trackmap grab failed:\n" + traceback.format_exc())
             return None
-
-    # -- controls ---------------------------------------------------------
-    def _auto_label(self):
-        return "Auto-capture: " + ("ON" if self.auto_capture else "OFF")
-
-    def on_toggle_auto(self, *args):
-        self.auto_capture = not self.auto_capture
-        self._set(self.b_auto, self._auto_label())
 
     def _publish(self, message, force=False, extra_paths=None):
         if not self.cfg.repo_configured():
@@ -521,13 +495,11 @@ class LeaderboardApp(object):
             log("update: pending handled")
 
         # A clicked driver button stashes its slot index; apply it here,
-        # outside the click event handler. Same for the auto-capture toggle.
+        # outside the click event handler.
         pick = _consume_pick()
         if pick is not None:
             log("update: pick " + str(pick))
             self.on_pick(pick)
-        if _consume_auto_clicked():
-            self.on_toggle_auto()
 
         # Mirror git status to the log from the MAIN thread (the worker thread
         # must never call ac.*). Cheap string compare each frame.
@@ -539,11 +511,10 @@ class LeaderboardApp(object):
         # at the slow cadence below, so while parked/typing there are ZERO
         # per-frame ac.* reads on the input path (belt-and-braces robustness;
         # you never type while driving anyway).
-        if self._moving and self.record_telemetry \
-                and self.auto_capture and self.track and self.car:
+        if self._moving and self.record_telemetry and self.track and self.car:
             self._sample_telemetry(dt)
 
-        # Everything else (UI, best-lap poll) runs at a relaxed cadence.
+        # Everything else (UI, lap poll) runs at a relaxed cadence.
         self._accum += dt
         if self._accum < 0.5:
             return
@@ -554,7 +525,8 @@ class LeaderboardApp(object):
         car = ac_data.get_car()
         if (track, cfg, car) != (self.track, self.track_config, self.car):
             self.track, self.track_config, self.car = track, cfg, car
-            self.last_seen_best = 0
+            self._lap_count = None
+            self._lap_invalid = False
             self.recorder.reset()
             self._set(self.l_track, "Track: " + self._combo_name(track, cfg))
             self._set(self.l_car, "Car: " + (car or "-"))
@@ -564,8 +536,7 @@ class LeaderboardApp(object):
         # telemetry sampling above does no ac.* work while parked.
         self._moving = ac_data.get_speed_kmh() >= 3.0
 
-        if self.auto_capture:
-            self._poll_best_lap()
+        self._poll_lap_complete()
 
         self._apply_status()
 
@@ -584,22 +555,39 @@ class LeaderboardApp(object):
             return "-"
         return track + ((" / " + cfg) if cfg else "")
 
-    def _poll_best_lap(self):
-        best = ac_data.get_best_lap_ms()
-        if best <= 0:
-            self.last_seen_best = 0
+    def _poll_lap_complete(self):
+        """Judge each COMPLETED lap against the current driver's own record.
+
+        Uses the lap counter (not AC's session best), so after a driver swap
+        the new driver only has to beat THEIR OWN time, not the session's.
+        Laps invalidated by cuts/off-track are discarded; so are laps finished
+        with no driver selected.
+        """
+        count = ac_data.get_lap_count()
+        if self._lap_count is None:
+            self._lap_count = count      # baseline; don't credit history
             return
-        if self.last_seen_best != 0 and best >= self.last_seen_best:
-            return  # nothing new since last poll
-        # Mark the lap as seen FIRST: with no driver selected it is discarded,
-        # not held for whoever gets picked later (they didn't drive it).
-        self.last_seen_best = best
+        if count == self._lap_count:
+            # Lap in progress: latch invalidation (the flag resets at the line).
+            if ac_data.get_lap_invalidated():
+                self._lap_invalid = True
+            return
+        self._lap_count = count
+        invalid = self._lap_invalid
+        self._lap_invalid = False
+        ms = ac_data.get_last_lap_ms()
+        if ms <= 0:
+            return
         user = self.current_user()
         if user is None:
-            self._set_status("lap " + format_ms(best) +
+            self._set_status("lap " + format_ms(ms) +
                              " not saved -- no driver selected", error=True)
             return
-        self._record(user, best)
+        if invalid:
+            self._set_status("lap " + format_ms(ms) +
+                             " invalid (cut) -- not saved", error=True)
+            return
+        self._record(user, ms)
 
 
 # -- module-level AC entry points -----------------------------------------

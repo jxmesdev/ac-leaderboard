@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lap Telemetry · AC Leaderboard</title>
+<title>Lap Telemetry · Bradford Leaderboard</title>
 <style>
   :root {
     --bg:#0e1116; --panel:#171b22; --panel2:#1e232c; --text:#e6edf3;
@@ -289,9 +289,10 @@
     var tm=trackImgMeta(), e=trackEdges();
     if(!sl.length && !e && !tm){ return; }
 
-    // "map space": real map.png pixels when we have a track map, else world metres
+    // "map space": real map.png pixels when we have a track map, else world
+    // metres. AC's map.ini transform is (world + OFFSET) / SCALE_FACTOR.
     var toMap = tm
-      ? function(x,z){ return [x*tm.scale+tm.xoff, z*tm.scale+tm.zoff]; }
+      ? function(x,z){ return [(x+tm.xoff)/tm.scale, (z+tm.zoff)/tm.scale]; }
       : function(x,z){ return [x,z]; };
     var flip = tm ? false : true;   // world space drawn y-up (flip); image space is y-down
 
@@ -316,7 +317,11 @@
     if(tm){
       ensureTrackImg(tm.url);
       if(trackImg && trackImg.complete && trackImg.naturalWidth){
-        var iw=tm.w||trackImg.naturalWidth, ih=tm.h||trackImg.naturalHeight;
+        // Draw at the PNG's NATURAL pixel size: map.ini pixel space IS the
+        // image's own pixel grid. map.ini WIDTH/HEIGHT are informational
+        // floats (e.g. 621.492 for a 621px image) -- stretching to them
+        // shifts the track visibly down/right of the line when zoomed in.
+        var iw=trackImg.naturalWidth, ih=trackImg.naturalHeight;
         var a=S(0,0), b=S(iw,ih);
         ctx.globalAlpha=0.9; ctx.drawImage(trackImg, a[0],a[1], b[0]-a[0], b[1]-a[1]); ctx.globalAlpha=1;
       }
