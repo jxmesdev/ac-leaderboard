@@ -1,12 +1,1 @@
-[
-  {
-    "car": "ks_mazda_mx5_cup", 
-    "config": "indy", 
-    "date": "2026-07-23T01:36:18Z", 
-    "source": "auto", 
-    "telemetry": "telemetry/ks_brands_hatch__indy__ks_mazda_mx5_cup__james.json", 
-    "time_ms": 53015, 
-    "track": "ks_brands_hatch", 
-    "user": "James"
-  }
-]
+[]
