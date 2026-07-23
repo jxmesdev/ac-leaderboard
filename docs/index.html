@@ -3,68 +3,78 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2712%27 fill=%27%230a0b09%27/%3E%3Ctext x=%2732%27 y=%2746%27 font-family=%27Arial Black,sans-serif%27 font-size=%2740%27 font-style=%27italic%27 font-weight=%27900%27 fill=%27%23b8ff00%27 text-anchor=%27middle%27%3EB%3C/text%3E%3C/svg%3E">
 <title>Bradford Leaderboard</title>
 <style>
   :root {
-    --bg: #0e1116; --panel: #171b22; --panel2: #1e232c; --text: #e6edf3;
-    --muted: #8b949e; --accent: #f5a623; --line: #2a303a; --gold: #f5c542;
-    --silver: #cbd5e1; --bronze: #cd7f32;
-  }
-  @media (prefers-color-scheme: light) {
-    :root {
-      --bg: #f6f8fa; --panel: #ffffff; --panel2: #f0f3f6; --text: #1f2328;
-      --muted: #656d76; --accent: #d97706; --line: #d0d7de;
-    }
+    --bg:#0a0b09; --panel:#111310; --panel2:#1a1e15; --text:#edf2e4;
+    --muted:#8b9384; --accent:#b8ff00; --line:#262b1f;
+    --gold:#b8ff00; --silver:#c8d2dc; --bronze:#cd8b4f; --danger:#ff5252;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font: 15px/1.5 "Titillium Web", -apple-system, "Segoe UI", Roboto, sans-serif;
   }
+  body::before { content:""; display:block; height:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, rgba(184,255,0,.25) 45%, transparent 80%); }
+  .brand h1 { margin:0 0 4px; font:italic 700 27px/1.1 "Chakra Petch",sans-serif;
+    text-transform:uppercase; letter-spacing:.5px; color:var(--text); }
+  .brand h1::before { content:"//"; color:var(--accent); margin-right:10px; }
+  .brand h1 .ln { color:var(--accent); }
+  .brand p { margin:0 0 30px; color:var(--muted); font-size:12px;
+    text-transform:uppercase; letter-spacing:2px; }
   .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 16px 60px; }
-  header h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: .3px; }
-  header p { margin: 0 0 30px; color: var(--muted); }
   .controls { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
   .field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 240px; }
-  label { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+  label { font: 600 11px "Chakra Petch", sans-serif; text-transform: uppercase;
+    letter-spacing: 1.4px; color: var(--muted); }
   select {
     appearance: none; background: var(--panel); color: var(--text);
-    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
-    font-size: 15px; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px;
+    font: 15px "Titillium Web", sans-serif; cursor: pointer;
   }
+  select:focus { outline: none; border-color: var(--accent); }
   .card {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
     overflow: hidden;
   }
   .card-head {
     padding: 14px 18px; border-bottom: 1px solid var(--line);
     display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
   }
-  .card-head .combo { font-weight: 600; }
+  .card-head .combo { font: italic 600 15px "Chakra Petch", sans-serif;
+    text-transform: uppercase; letter-spacing: .4px; }
   .card-head .count { color: var(--muted); font-size: 13px; }
   table { width: 100%; border-collapse: collapse; }
   th, td { padding: 11px 18px; text-align: left; }
-  th { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+  th { font: 600 11px "Chakra Petch", sans-serif; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--muted); }
   tbody tr { border-top: 1px solid var(--line); }
   tbody tr:hover { background: var(--panel2); }
   td.rank { width: 46px; font-variant-numeric: tabular-nums; color: var(--muted); }
   td.time, td.gap { text-align: right; font-variant-numeric: tabular-nums; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
   td.gap { color: var(--muted); }
-  td.user { font-weight: 500; }
+  td.user { font-weight: 600; }
   tr.p1 td.rank { color: var(--gold); font-weight: 700; }
+  tr.p1 td.time { color: var(--accent); }
   tr.p2 td.rank { color: var(--silver); font-weight: 700; }
   tr.p3 td.rank { color: var(--bronze); font-weight: 700; }
   .badge { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); margin-left: 8px; vertical-align: middle; }
   tbody tr[data-href] { cursor: pointer; }
-  tbody tr[data-href]:hover { background: var(--panel2); }
+  tbody tr[data-href]:hover { background: var(--panel2); box-shadow: inset 3px 0 0 var(--accent); }
   .head-right { display: flex; align-items: center; gap: 12px; }
-  .toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
   .toggle button {
-    background: none; border: 0; color: var(--muted); font: inherit;
-    font-size: 12px; padding: 4px 10px; cursor: pointer;
+    background: none; border: 0; color: var(--muted);
+    font: 600 11px "Chakra Petch", sans-serif; text-transform: uppercase;
+    letter-spacing: .8px; padding: 5px 10px; cursor: pointer;
   }
   .toggle button + button { border-left: 1px solid var(--line); }
-  .toggle button.on { background: var(--panel2); color: var(--text); font-weight: 600; }
+  .toggle button.on { background: var(--accent); color: #0a0b09; }
   .empty { padding: 40px 18px; text-align: center; color: var(--muted); }
   @media (max-width: 760px) { .seccol { display: none; } }
   footer { margin-top: 26px; color: var(--muted); font-size: 12px; text-align: center; }
@@ -73,8 +83,8 @@
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>🏁 Bradford Leaderboard</h1>
+  <header class="brand">
+    <h1>Bradford<span class="ln"> Leaderboard</span></h1>
     <p>Fastest valid laps per track &amp; car combination.</p>
   </header>
 

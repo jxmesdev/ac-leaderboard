@@ -3,43 +3,51 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2712%27 fill=%27%230a0b09%27/%3E%3Ctext x=%2732%27 y=%2746%27 font-family=%27Arial Black,sans-serif%27 font-size=%2740%27 font-style=%27italic%27 font-weight=%27900%27 fill=%27%23b8ff00%27 text-anchor=%27middle%27%3EB%3C/text%3E%3C/svg%3E">
 <title>Lap Telemetry · Bradford Leaderboard</title>
 <style>
   :root {
-    --bg:#0e1116; --panel:#171b22; --panel2:#1e232c; --text:#e6edf3;
-    --muted:#8b949e; --line:#2a303a; --accent:#f5a623;
-  }
-  @media (prefers-color-scheme: light) {
-    :root { --bg:#f6f8fa; --panel:#fff; --panel2:#f0f3f6; --text:#1f2328;
-            --muted:#656d76; --line:#d0d7de; --accent:#d97706; }
+    --bg:#0a0b09; --panel:#111310; --panel2:#1a1e15; --text:#edf2e4;
+    --muted:#8b9384; --accent:#b8ff00; --line:#262b1f;
+    --gold:#b8ff00; --silver:#c8d2dc; --bronze:#cd8b4f; --danger:#ff5252;
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text);
-    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+    font:14px/1.5 "Titillium Web", -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body::before { content:""; display:block; height:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, rgba(184,255,0,.25) 45%, transparent 80%); }
+  .brand h1 { margin:0 0 4px; font:italic 700 27px/1.1 "Chakra Petch",sans-serif;
+    text-transform:uppercase; letter-spacing:.5px; color:var(--text); }
+  .brand h1::before { content:"//"; color:var(--accent); margin-right:10px; }
+  .brand h1 .ln { color:var(--accent); }
+  .brand p { margin:0 0 30px; color:var(--muted); font-size:12px;
+    text-transform:uppercase; letter-spacing:2px; }
   .wrap { max-width:1100px; margin:0 auto; padding:28px 16px 60px; }
   a { color:var(--accent); text-decoration:none; }
   a:hover { text-decoration:underline; }
-  a.brand { display:block; color:var(--text); margin-bottom:30px; }
+  a.brand { display:block; }
   a.brand:hover { text-decoration:none; }
-  .brand h1 { font-size:26px; margin:0 0 4px; letter-spacing:.3px; }
-  .brand p { margin:0; color:var(--muted); font-size:13px; }
   .top { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
   h1 { font-size:20px; margin:0 0 2px; }
+  #title { font:italic 600 20px "Chakra Petch", sans-serif; text-transform:uppercase; letter-spacing:.4px; }
   .sub { color:var(--muted); font-size:13px; }
   .grid { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; margin-top:16px; }
   @media (max-width:820px){ .grid { grid-template-columns:1fr; } }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; }
-  .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.6px;
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; }
+  .card h2 { font:600 11px "Chakra Petch", sans-serif; text-transform:uppercase; letter-spacing:1.2px;
     color:var(--muted); margin:0; padding:10px 14px; border-bottom:1px solid var(--line); }
   .mapwrap { padding:10px; position:relative; }
   .mapsec { position:absolute; top:16px; left:16px; z-index:5; margin:0; }
   #map { width:100%; height:auto; display:block; }
   .laps { padding:6px 6px 10px; }
-  .lap { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; cursor:pointer; }
+  .lap { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:6px; cursor:pointer; }
   .lap:hover { background:var(--panel2); }
-  .lap input { margin:0; }
+  .lap input { margin:0; accent-color:var(--accent); }
   .swatch { width:12px; height:12px; border-radius:3px; flex:0 0 auto; }
-  .lap .nm { font-weight:500; }
+  .lap .nm { font-weight:600; }
   .lap .tm { margin-left:auto; font-variant-numeric:tabular-nums;
     font-family:ui-monospace,Menlo,monospace; color:var(--muted); }
   .lap .dl { font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; font-size:12px; }
@@ -50,7 +58,8 @@
   .readout th:first-child { width:22%; }
   .readout th, .readout td { text-align:right; padding:3px 4px; font-variant-numeric:tabular-nums; }
   .readout th:first-child, .readout td:first-child { text-align:left; }
-  .readout thead th { color:var(--muted); font-weight:600; }
+  .readout thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
+    text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
   .hint { color:var(--muted); font-size:12px; padding:0 14px 12px; }
   canvas.trace { width:100%; display:block; touch-action:none; }
   .empty { padding:40px; text-align:center; color:var(--muted); }
@@ -58,23 +67,24 @@
   .secbody { padding:10px 14px 12px; }
   .secbtns { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
   .secbtns button { background:var(--panel2); color:var(--text); border:1px solid var(--line);
-    border-radius:6px; padding:3px 12px; font:12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    cursor:pointer; }
+    border-radius:6px; padding:3px 12px; font:600 11px "Chakra Petch",sans-serif;
+    text-transform:uppercase; letter-spacing:.8px; cursor:pointer; }
   .secbtns button:hover { border-color:var(--muted); }
-  .secbtns button.on { border-color:var(--accent); color:var(--accent); }
+  .secbtns button.on { background:var(--accent); border-color:var(--accent); color:#0a0b09; }
   .sectable { border-collapse:collapse; font-size:12px; }
   .sectable th, .sectable td { text-align:right; padding:3px 0 3px 22px;
     font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; }
   .sectable th:first-child, .sectable td:first-child { text-align:left; padding-left:0;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-  .sectable thead th { color:var(--muted); font-weight:600; }
+    font-family:"Titillium Web",-apple-system,sans-serif; }
+  .sectable thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
+    text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
   .secmuted { color:var(--muted); font-size:12px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <a class="brand" href="index.html">
-    <h1>🏁 Bradford Leaderboard</h1>
+    <h1>Bradford<span class="ln"> Leaderboard</span></h1>
     <p>Fastest valid laps per track &amp; car combination.</p>
   </a>
   <div class="top">
@@ -117,7 +127,7 @@
 <script>
 (function () {
   "use strict";
-  var PALETTE = ["#f5a623","#58a6ff","#3fb950","#bc8cff","#f85149","#39c5cf","#db61a2","#d29922","#7ee787","#ff9bce"];
+  var PALETTE = ["#b8ff00","#4fc3ff","#ff6ec7","#ffa726","#c792ff","#2ee6a8","#ff5252","#ffd54f","#8ab4ff","#64ffda"];
   var CH = [
     {key:"thr",  label:"Throttle", unit:"%",    lo:0, hi:100},
     {key:"brk",  label:"Brake",    unit:"%",    lo:0, hi:100},
@@ -651,7 +661,7 @@
       html += "<td>"+Math.round(s.gear)+"</td><td>"+s.str.toFixed(0)+"</td>";
       var dl="";
       if(p && l!==primary){ var d=(s.t-p.t)/1000; dl=(d>=0?"+":"")+d.toFixed(2); }
-      html += "<td class='dl' style='color:"+(dl&&dl[0]==="+"?"#f85149":(dl?"#3fb950":"var(--muted)"))+"'>"+dl+"</td></tr>";
+      html += "<td class='dl' style='color:"+(dl&&dl[0]==="+"?"var(--danger)":(dl?"var(--accent)":"var(--muted)"))+"'>"+dl+"</td></tr>";
     });
     t.innerHTML = html+"</tbody>";
   }
@@ -745,7 +755,7 @@
         if(i>=sp.length){ r+="<td></td>"; continue; }
         var col="";
         if(l!==primary){
-          if(sp[i]<ps[i]) col="color:#3fb950"; else if(sp[i]>ps[i]) col="color:#f85149";
+          if(sp[i]<ps[i]) col="color:var(--accent)"; else if(sp[i]>ps[i]) col="color:var(--danger)";
         }
         r+="<td style='"+col+"'>"+fmtSec(sp[i])+"</td>";
       }
