@@ -31,7 +31,8 @@
   .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; }
   .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.6px;
     color:var(--muted); margin:0; padding:10px 14px; border-bottom:1px solid var(--line); }
-  .mapwrap { padding:10px; }
+  .mapwrap { padding:10px; position:relative; }
+  .mapsec { position:absolute; top:16px; left:16px; z-index:5; margin:0; }
   #map { width:100%; height:auto; display:block; }
   .laps { padding:6px 6px 10px; }
   .lap { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; cursor:pointer; }
@@ -88,6 +89,7 @@
       <div class="card">
         <h2>Track map</h2>
         <div class="mapwrap">
+          <div class="secbtns mapsec" id="mapsec"></div>
           <canvas id="map"></canvas>
           <div class="hint" style="padding:6px 4px 0">scroll = zoom · drag = pan · double-click = reset</div>
         </div>
@@ -670,9 +672,27 @@
     focus=null; mapFitPending=true; secSig=""; scheduleRender();
   }
   var secSig="";
+  // fill a container with [S1]..[Sn][All] focus buttons reflecting `focus`;
+  // used by BOTH the Sectors card and the overlay on the track map, so the
+  // two bars can never drift apart (both are rebuilt from the same state).
+  function fillSecBar(el, ps){
+    el.innerHTML="";
+    ps.forEach(function(_, i){
+      var b=document.createElement("button"); b.textContent="S"+(i+1);
+      if(focus && focus.i===i) b.className="on";
+      b.addEventListener("click", function(){ focusSector(i); });
+      el.appendChild(b);
+    });
+    var all=document.createElement("button"); all.textContent="All";
+    if(!focus) all.className="on";
+    all.addEventListener("click", focusAll);
+    el.appendChild(all);
+  }
+
   function renderSectors(sl){
     var card=document.getElementById("sectors"), body=document.getElementById("secbody");
-    if(!(primary && primary.data)){ card.style.display="none"; secSig=""; return; }
+    var mapbar=document.getElementById("mapsec");
+    if(!(primary && primary.data)){ card.style.display="none"; mapbar.innerHTML=""; secSig=""; return; }
     var ps=splitsOf(primary);
     var sig=(ps?ps.join(","):"none")+"|"+(focus?focus.i:-1)+"|"+
       sl.map(function(l){ return l.rec.telemetry; }).join(";");
@@ -681,24 +701,16 @@
     card.style.display="";
     body.innerHTML="";
     if(!ps){
+      mapbar.innerHTML="";
       var mu=document.createElement("div"); mu.className="secmuted";
       mu.textContent="No sector data — lap predates sector recording.";
       body.appendChild(mu);
       return;
     }
-    // focus buttons [S1]..[Sn][All]
     var bar=document.createElement("div"); bar.className="secbtns";
-    ps.forEach(function(_, i){
-      var b=document.createElement("button"); b.textContent="S"+(i+1);
-      if(focus && focus.i===i) b.className="on";
-      b.addEventListener("click", function(){ focusSector(i); });
-      bar.appendChild(b);
-    });
-    var all=document.createElement("button"); all.textContent="All";
-    if(!focus) all.className="on";
-    all.addEventListener("click", focusAll);
-    bar.appendChild(all);
+    fillSecBar(bar, ps);
     body.appendChild(bar);
+    fillSecBar(mapbar, ps);
     // sector times: primary plain, other shown laps colored vs primary
     var html="<thead><tr><th>Lap</th>";
     ps.forEach(function(_, i){ html+="<th>S"+(i+1)+"</th>"; });
