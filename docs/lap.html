@@ -351,7 +351,7 @@
     var tsec=document.createElement("div"); tsec.className="secbtns"; tsec.id="tracesec";
     host.appendChild(tsec);
     CH.concat([DELTA_CH]).forEach(function(ch){
-      var wrap=document.createElement("div"); wrap.style.padding="0 8px 4px";
+      var wrap=document.createElement("div"); wrap.style.padding="0 8px 4px 0";
       var tt=document.createElement("div"); tt.className="tracetitle";
       tt.textContent=ch.label+(ch.unit?(" ("+ch.unit+")"):"");
       var cv=document.createElement("canvas"); cv.className="trace"; cv.dataset.key=ch.key;
