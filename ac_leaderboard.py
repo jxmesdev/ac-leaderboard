@@ -27,10 +27,15 @@ from acl_core.timefmt import format_ms
 APP_NAME = "AC Leaderboard"
 
 # One-shot diagnostic: when True, acUpdate applies a typed driver name and does
-# NOTHING else -- no ac.getCarState/getTrackName polling. This isolates whether
-# the Enter crash comes from car-state reads in the update loop (crash stops)
-# or from the built widgets (crash persists). Remove once identified.
+# NOTHING else -- no ac.getCarState/getTrackName polling. (Confirmed the update
+# loop is NOT the crash cause: crashed on Enter even with this True.)
 DIAG_INERT_UPDATE = True
+
+# One-shot diagnostic: when True, build() creates NO interactive buttons (no
+# driver-grid buttons, no auto-capture button) -- only labels + the one text
+# field. Isolates whether the Enter crash comes from interactive widgets around
+# the field (crash stops) or from label count (crash persists). Remove once done.
+DIAG_NO_BUTTONS = True
 
 # Layout constants (pixels).
 WIN_W = 380
@@ -155,24 +160,25 @@ class LeaderboardApp(object):
         y += 20
 
         # Clickable driver grid (2 columns). Empty slots are parked off-screen.
-        col_w = (WIN_W - (DRIVER_COLS + 1) * MARGIN) // DRIVER_COLS
-        grid_y0 = y
-        for i in range(MAX_DRIVERS):
-            col = i % DRIVER_COLS
-            row = i // DRIVER_COLS
-            bx = MARGIN + col * (col_w + MARGIN)
-            by = grid_y0 + row * 26
-            bid = ac.addButton(self.window, "")
-            ac.setPosition(bid, bx, by)
-            ac.setSize(bid, col_w, 22)
-            ac.addOnClickedListener(bid, self._make_pick_cb(i))
-            try:
-                ac.setFontSize(bid, 13)
-            except Exception:
-                pass
-            self.driver_btns.append(bid)
-            self.driver_btn_pos.append((bx, by))
-        y = grid_y0 + driver_grid_rows * 26 + 6
+        if not DIAG_NO_BUTTONS:
+            col_w = (WIN_W - (DRIVER_COLS + 1) * MARGIN) // DRIVER_COLS
+            grid_y0 = y
+            for i in range(MAX_DRIVERS):
+                col = i % DRIVER_COLS
+                row = i // DRIVER_COLS
+                bx = MARGIN + col * (col_w + MARGIN)
+                by = grid_y0 + row * 26
+                bid = ac.addButton(self.window, "")
+                ac.setPosition(bid, bx, by)
+                ac.setSize(bid, col_w, 22)
+                ac.addOnClickedListener(bid, self._make_pick_cb(i))
+                try:
+                    ac.setFontSize(bid, 13)
+                except Exception:
+                    pass
+                self.driver_btns.append(bid)
+                self.driver_btn_pos.append((bx, by))
+            y = grid_y0 + driver_grid_rows * 26 + 6
 
         # Add a driver: type a name + Enter. (No "+ Add me" button -- it triggered
         # a native crash on this rig; typing is the single, reliable path.)
@@ -181,9 +187,10 @@ class LeaderboardApp(object):
         self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 22,
                                            self._make_validate_cb())
         y += 28
-        self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
-                                   self.on_toggle_auto)
-        y += 28
+        if not DIAG_NO_BUTTONS:
+            self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
+                                       self.on_toggle_auto)
+            y += 28
 
         # Status line.
         self.l_status = self._label("", MARGIN, y, 12)
