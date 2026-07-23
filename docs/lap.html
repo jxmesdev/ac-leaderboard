@@ -88,6 +88,12 @@
   .tracetitle { font:600 11px "Chakra Petch",sans-serif; text-transform:uppercase;
     letter-spacing:1px; color:var(--muted); padding:10px 8px 2px 46px; }
   .empty { padding:40px; text-align:center; color:var(--muted); }
+  .card > h2.tgl { cursor:pointer; user-select:none; }
+  .card > h2.tgl::after { content:"\25BE"; float:right; color:var(--muted);
+    transition:transform .15s; }
+  .card.collapsed > h2.tgl { border-bottom:none; }
+  .card.collapsed > h2.tgl::after { transform:rotate(-90deg); }
+  .card.collapsed > *:not(h2) { display:none !important; }
   .sectors { margin-top:16px; }
   .secbody { padding:10px 14px 12px; }
   .secbtns { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
@@ -165,7 +171,7 @@
         <div class="laps" id="laps"></div>
       </div>
     </div>
-    <div class="card sectors">
+    <div class="card sectors" id="cursorcard">
       <h2>At cursor <span id="cursorpos" style="text-transform:none;letter-spacing:0;color:var(--muted)"></span></h2>
       <div class="readout"><table id="readout"></table></div>
     </div>
@@ -446,6 +452,20 @@
     attachHover();
     attachMapInteraction();
     window.addEventListener("resize", scheduleRender);
+    ["cursorcard", "sectors", "traces", "setups"].forEach(function(id){
+      makeCollapsible(document.getElementById(id));
+    });
+  }
+
+  function makeCollapsible(card){
+    if(!card) return;
+    var h = card.querySelector("h2");
+    if(!h || h.classList.contains("tgl")) return;
+    h.classList.add("tgl");
+    h.addEventListener("click", function(){
+      card.classList.toggle("collapsed");
+      scheduleRender();   // canvases sized 0 while hidden: redraw on expand
+    });
   }
 
   function shownLaps(){ return laps.filter(function(l){ return l.shown && l.data; }); }
