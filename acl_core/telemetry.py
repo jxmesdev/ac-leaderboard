@@ -87,7 +87,9 @@ class LapRecorder(object):
         cur["thr"].append(_clamp_pct(_f(gas) * 100.0))
         cur["brk"].append(_clamp_pct(_f(brake) * 100.0))
         cur["spd"].append(round(speed_kmh, 1))
-        cur["gear"].append(int(_f(gear)))
+        # AC reports gear as 0=R, 1=N, 2=1st...; store display numbering
+        # (-1=R, 0=N, 1=1st) so the viewer and MoTeC-style tools read true.
+        cur["gear"].append(int(_f(gear)) - 1)
         # acsys.CS.Steer is already steering-wheel DEGREES (verified on
         # real data: converting as radians inflated the channel ~57x).
         cur["str"].append(round(_f(steer_deg), 1))
