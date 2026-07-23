@@ -246,11 +246,14 @@
   var globalEdges=null;   // per-track true boundary, fetched by convention
   var globalSections=null; // corner names/numbers from AC's sections.ini
   function comboMatch(r){ return norm(r.track)===want.track && norm(r.config||"")===want.config && norm(r.car)===want.car; }
-  function getJSON(u){ return fetch(u,{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error(u+" "+r.status); return r.json(); }); }
+  // mode: "no-store" = always fresh (records); "force-cache" = immutable
+  // (telemetry files -- the filename embeds the lap time, content never
+  // changes); default = normal HTTP caching (edges/sections, ~10 min).
+  function getJSON(u, mode){ return fetch(u, mode?{cache:mode}:{}).then(function(r){ if(!r.ok) throw new Error(u+" "+r.status); return r.json(); }); }
   function fail(msg){ document.getElementById("subtitle").textContent="";
     var e=document.getElementById("error"); e.style.display="block"; e.textContent=msg; }
 
-  getJSON("data/records.json").then(function(records){
+  getJSON("data/records.json", "no-store").then(function(records){
     if(!Array.isArray(records)) records=[];
     var roster = records.filter(comboMatch).filter(function(r){return r.telemetry;});
     roster.sort(function(a,b){ return (a.time_ms||1e12)-(b.time_ms||1e12); });
@@ -422,7 +425,7 @@
     syncShowParam();
     if(on && !l.data && !l.loading){
       l.loading = true;
-      getJSON("data/"+l.rec.telemetry).then(function(d){
+      getJSON("data/"+l.rec.telemetry, "force-cache").then(function(d){
         l.data=d; l.loading=false;
         // True track boundary (world metres, from ai/fast_lane.ai) is stored
         // beside the trackmap and referenced by URL; attach it once loaded.

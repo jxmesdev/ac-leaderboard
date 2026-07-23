@@ -258,6 +258,7 @@
   }
 
   function getJSON(url) {
+    // tiny + must always be fresh (new laps appear the moment Pages deploys)
     return fetch(url, { cache: "no-store" }).then(function (r) {
       if (!r.ok) throw new Error(url + " " + r.status);
       return r.json();
