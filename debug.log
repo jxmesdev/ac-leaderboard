@@ -1,4 +1,4 @@
 acMain: start LEVEL=4
 acMain: core imported
 acMain: objects created
-acMain: build ok
+acMain: bare build + class validate
