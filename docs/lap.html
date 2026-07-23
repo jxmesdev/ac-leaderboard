@@ -97,9 +97,9 @@
     font-family:"Titillium Web",-apple-system,sans-serif; color:var(--muted); }
   .setuptable thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
-  .setuptable tbody tr:hover td { background:var(--panel2); }
-  .setuptable tbody tr:hover td:first-child { border-radius:6px 0 0 6px; }
-  .setuptable tbody tr:hover td:last-child { border-radius:0 6px 6px 0; }
+  .setuptable tbody tr:not(.dlrow):hover td { background:var(--panel2); }
+  .setuptable tbody tr:not(.dlrow):hover td:first-child { border-radius:6px 0 0 6px; }
+  .setuptable tbody tr:not(.dlrow):hover td:last-child { border-radius:0 6px 6px 0; }
   .setuptable button.dlbtn { background:var(--panel2); color:var(--text);
     border:1px solid var(--line); padding:2px 8px; font:600 10px "Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.5px; cursor:pointer; }
@@ -927,7 +927,7 @@
       html+="</tr>";
     });
     // download row: one compact button under each lap's column
-    html+="<tr><td></td>";
+    html+="<tr class='dlrow'><td></td>";
     withSetup.forEach(function(_, vi){
       html+="<td><button class='dlbtn' data-i='"+vi+"' title='Download this lap&#39;s setup file'>"+
         DLICON+"Setup</button></td>";
