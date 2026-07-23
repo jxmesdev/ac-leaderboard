@@ -94,7 +94,7 @@
     background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpolyline points='1,1.2 5,4.8 9,1.2' fill='none' stroke='%238b9384' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
     transition:transform .15s; transform:scaleY(-1); }      /* chevron up */
   .card.collapsed > h2.tgl { border-bottom:none; }
-  .card.collapsed > h2.tgl::after { transform:scaleY(1); }  /* chevron down */
+  .card.shut > h2.tgl::after { transform:scaleY(1); }       /* chevron down */
   .card.collapsed > *:not(h2) { display:none !important; }
   .card.anim { transition:height .25s ease; overflow:hidden; }
   .sectors { margin-top:16px; }
@@ -470,7 +470,8 @@
       var hH = h.offsetHeight;
       card.classList.add("anim");
       if(!card.classList.contains("collapsed")){
-        // collapse: animate current height down to just the header
+        // collapse: flip the chevron NOW, slide the body shut, then hide it
+        card.classList.add("shut");
         card.style.height = card.offsetHeight + "px";
         void card.offsetHeight;                    // commit start height
         card.style.height = hH + "px";
@@ -481,7 +482,7 @@
         }, 260);
       } else {
         // expand: reveal content, then animate header-height -> full height
-        card.classList.remove("collapsed");
+        card.classList.remove("collapsed", "shut");
         var target = card.scrollHeight;
         card.style.height = hH + "px";
         void card.offsetHeight;
