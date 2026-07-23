@@ -76,7 +76,10 @@
   .readout table { width:100%; border-collapse:collapse; font-size:12px;
     table-layout:fixed; }
   .readout th:first-child { width:22%; }
-  .readout th, .readout td { text-align:right; padding:3px 4px; font-variant-numeric:tabular-nums; }
+  .readout th, .readout td { text-align:right; padding:4px 8px; font-variant-numeric:tabular-nums; }
+  .readout tbody tr:hover td { background:var(--panel2); }
+  .readout tbody tr:hover td:first-child { border-radius:6px 0 0 6px; }
+  .readout tbody tr:hover td:last-child { border-radius:0 6px 6px 0; }
   .readout th:first-child, .readout td:first-child { text-align:left; }
   .readout thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
@@ -95,9 +98,13 @@
   .secbtns button:hover { border-color:var(--muted); }
   .secbtns button.on { background:var(--accent); border-color:var(--accent); color:#0a0a0b; }
   .sectable { border-collapse:collapse; font-size:12px; width:100%; }
-  .sectable th, .sectable td { text-align:right; padding:3px 0 3px 38px;
+  .sectable th, .sectable td { text-align:right; padding:4px 0 4px 38px;
     font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; }
-  .sectable th:first-child, .sectable td:first-child { text-align:left; padding-left:0;
+  .sectable th:last-child, .sectable td:last-child { padding-right:10px; }
+  .sectable tbody tr:hover td { background:var(--panel2); }
+  .sectable tbody tr:hover td:first-child { border-radius:6px 0 0 6px; }
+  .sectable tbody tr:hover td:last-child { border-radius:0 6px 6px 0; }
+  .sectable th:first-child, .sectable td:first-child { text-align:left; padding-left:10px;
     font-family:"Titillium Web",-apple-system,sans-serif; }
   .sectable thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
