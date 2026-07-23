@@ -90,9 +90,9 @@
   .empty { padding:40px; text-align:center; color:var(--muted); }
   .card > h2.tgl { cursor:pointer; user-select:none; }
   .card > h2.tgl::after { content:"\25BE"; float:right; color:var(--muted);
-    transition:transform .15s; transform:rotate(180deg); }
+    transition:transform .15s; transform:scaleY(-1); }
   .card.collapsed > h2.tgl { border-bottom:none; }
-  .card.collapsed > h2.tgl::after { transform:rotate(0deg); }
+  .card.collapsed > h2.tgl::after { transform:scaleY(1); }
   .card.collapsed > *:not(h2) { display:none !important; }
   .sectors { margin-top:16px; }
   .secbody { padding:10px 14px 12px; }
