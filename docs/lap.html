@@ -26,13 +26,20 @@
   .brand h1 .ln { color:var(--accent); }
   .brand p { margin:0 0 60px; color:var(--muted); font-size:12px;
     text-transform:uppercase; letter-spacing:2px; }
-  .wrap { max-width:1100px; margin:0 auto; padding:40px 16px 60px; width:100%;
+  .wrap { max-width:1920px; margin:0 auto; padding:40px 16px 60px; width:100%;
     min-height:100vh; display:flex; flex-direction:column; }
   .wrap > * { flex:0 0 auto; }
   a { color:var(--accent); text-decoration:none; }
   a:hover { text-decoration:underline; }
   a.brand { display:block; }
   a.brand:hover { text-decoration:none; }
+  #primsel { -webkit-appearance:none; appearance:none; background:var(--panel2);
+    color:var(--text); border:1px solid var(--line); border-radius:0;
+    padding:3px 26px 3px 10px; cursor:pointer;
+    font:600 12px "Chakra Petch",sans-serif; letter-spacing:.5px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpolyline points='1,1.2 5,4.8 9,1.2' fill='none' stroke='%238b9384' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 8px center; background-size:9px 6px; }
+  #primsel:focus { outline:none; border-color:var(--accent); }
   .back { display:inline-block; margin:-16px 0 14px; font:600 11px "Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:1.2px; }
   .top { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
@@ -40,8 +47,17 @@
   #title { font:italic 600 20px "Chakra Petch", sans-serif; text-transform:uppercase;
     letter-spacing:.4px; margin-bottom:8px; }
   .sub { color:var(--muted); font-size:13px; }
-  .grid { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; margin-top:20px; }
-  @media (max-width:820px){ .grid { grid-template-columns:1fr; } }
+  .layout { display:grid; grid-template-columns:1fr; gap:16px; margin-top:20px; }
+  .layout .card { margin-top:0; }
+  .colL, .colR, .pair { display:contents; }
+  #mapcard{order:1} #lapscard{order:2} #cursorcard{order:3}
+  #sectors{order:4} #traces{order:5} #setups{order:6}
+  @media (min-width:1281px){
+    .layout { grid-template-columns:1fr 1fr; align-items:start; }
+    .colL, .colR { display:flex; flex-direction:column; gap:16px; min-width:0; }
+    .pair { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+    .pair .sectable th, .pair .sectable td { padding-left:16px; }
+  }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:0; }
   .card h2 { font:600 11px "Chakra Petch", sans-serif; text-transform:uppercase; letter-spacing:1.2px;
     color:var(--muted); margin:0; padding:10px 14px; border-bottom:1px solid var(--line); }
@@ -160,32 +176,38 @@
   </div>
 
   <div id="content" style="display:none">
-    <div class="grid">
-      <div class="card">
-        <h2>Track map</h2>
-        <div class="mapwrap">
-          <div class="secbtns mapsec" id="mapsec"></div>
-          <canvas id="map"></canvas>
-          <div class="hint" style="padding:6px 4px 0">scroll = zoom · drag = pan · double-click = reset</div>
+    <div class="layout">
+      <div class="colL">
+        <div class="pair">
+          <div class="card" id="lapscard">
+            <h2>Laps</h2>
+            <div class="laps" id="laps"></div>
+          </div>
+          <div class="card" id="sectors" style="display:none">
+            <h2>Sectors</h2>
+            <div class="secbody" id="secbody"></div>
+          </div>
+        </div>
+        <div class="card" id="mapcard">
+          <h2>Track map</h2>
+          <div class="mapwrap">
+            <div class="secbtns mapsec" id="mapsec"></div>
+            <canvas id="map"></canvas>
+            <div class="hint" style="padding:6px 4px 0">scroll = zoom · drag = pan · double-click = reset</div>
+          </div>
+        </div>
+        <div class="card" id="cursorcard">
+          <h2>At cursor <span id="cursorpos" style="text-transform:none;letter-spacing:0;color:var(--muted)"></span></h2>
+          <div class="readout"><table id="readout"></table></div>
         </div>
       </div>
-      <div class="card">
-        <h2>Laps</h2>
-        <div class="laps" id="laps"></div>
+      <div class="colR">
+        <div class="card" id="traces"></div>
+        <div class="card" id="setups" style="display:none">
+          <h2>Setups</h2>
+          <div class="secbody" id="setupbody"></div>
+        </div>
       </div>
-    </div>
-    <div class="card sectors" id="cursorcard">
-      <h2>At cursor <span id="cursorpos" style="text-transform:none;letter-spacing:0;color:var(--muted)"></span></h2>
-      <div class="readout"><table id="readout"></table></div>
-    </div>
-    <div class="card sectors" id="sectors" style="display:none">
-      <h2>Sectors</h2>
-      <div class="secbody" id="secbody"></div>
-    </div>
-    <div class="card traces" id="traces"></div>
-    <div class="card sectors" id="setups" style="display:none">
-      <h2>Setups</h2>
-      <div class="secbody" id="setupbody"></div>
     </div>
   </div>
 
@@ -394,15 +416,23 @@
   function applyTitles(){
     var combo = pretty(primary.rec.track) + (primary.rec.config? " ("+pretty(primary.rec.config)+")":"") + " — " + pretty(primary.rec.car);
     document.getElementById("title").textContent = combo;
-    // uniform 6px gaps between label, trophy, name, dot, time
-    document.getElementById("subtitle").innerHTML =
-      "<b style='color:var(--text)'>Primary Lap:</b>" +
-      (primary.trophy ? "<span>" + primary.trophy + "</span>" : "") +
-      "<span>" + esc(primary.rec.user) + "</span>" +
-      "<span style='width:4px;height:4px;border-radius:50%;background:var(--muted);align-self:center;margin:0 -1px'></span>" +
-      "<span>" + fmtTime(primary.rec.time_ms) + "</span>";
-    document.getElementById("subtitle").style.cssText =
-      "display:flex;gap:6px;align-items:baseline;flex-wrap:wrap";
+    // label + styled dropdown of every lap; changing it switches primary
+    var sub = document.getElementById("subtitle");
+    sub.innerHTML = "<b style='color:var(--text)'>Primary Lap:</b>";
+    sub.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap";
+    var sel = document.createElement("select"); sel.id = "primsel";
+    laps.forEach(function(l, i){
+      var o = document.createElement("option");
+      o.value = i;
+      o.textContent = (l.trophy ? l.trophy + " " : "") + l.rec.user +
+        " — " + fmtTime(l.rec.time_ms);
+      if(l === primary) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener("change", function(){
+      setPrimary(laps[parseInt(sel.value, 10)]);
+    });
+    sub.appendChild(sel);
     document.title = "Telemetry · " + primary.rec.user + " · " + combo;
   }
 
