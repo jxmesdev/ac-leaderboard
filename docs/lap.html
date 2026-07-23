@@ -976,7 +976,13 @@
     body.appendChild(tbl);
     var note=document.createElement("div"); note.className="secmuted";
     note.style.marginTop="8px";
-    note.textContent="Setup = the most recently saved setup for this car/track when the lap was recorded.";
+    var srcs=withSetup.map(function(l){ return l.data.setup.src||"latest_saved"; });
+    var nLive=srcs.filter(function(x){ return x==="live"; }).length;
+    note.textContent = nLive===srcs.length
+      ? "Setups captured live from the sim — the exact setup each lap was driven on."
+      : nLive
+        ? "Some setups captured live from the sim; others are the most recently saved file when the lap was recorded."
+        : "Setup = the most recently saved setup for this car/track when the lap was recorded.";
     body.appendChild(note);
   }
 

@@ -16,3 +16,6 @@ _localdata/
 # Assetto Corsa crash reports (may contain a memory dump + your username)
 *.dmp
 *.report
+
+# Live setup written by the BL Setup Capture Lua companion
+current_setup.ini

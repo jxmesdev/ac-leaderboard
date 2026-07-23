@@ -20,7 +20,7 @@ if APP_DIR not in sys.path:
 
 import ac  # provided by Assetto Corsa
 
-from acl_core import ac_data, ailine, config, setups, storage, telemetry, trackmap
+from acl_core import ac_data, ailine, config, luainstall, setups, storage, telemetry, trackmap
 from acl_core.git_sync import GitSync
 from acl_core.leaderboard import leaderboard_for
 from acl_core.timefmt import format_ms
@@ -465,9 +465,12 @@ class LeaderboardApp(object):
                     extra.append(eg[1])
             su = self._grab_setup(car, track)
             if su is not None:
-                payload["setup"] = {"name": su["name"], "ini": su["ini"],
+                name = su.get("name") or \
+                    (telemetry.slug(rec["user"]) + "_" +
+                     str(int(rec["time_ms"])) + ".ini")
+                payload["setup"] = {"name": name, "ini": su["ini"],
                                     "folder": su["folder"],
-                                    "src": "latest_saved"}
+                                    "src": su.get("src") or "latest_saved"}
             relpath = telemetry.write_telemetry(self.cfg.data_dir, payload)
         except Exception:
             log("telemetry write failed:\n" + traceback.format_exc())
@@ -532,11 +535,29 @@ class LeaderboardApp(object):
             self.git.request_push(paths, "Track data " + self.track)
 
     def _grab_setup(self, car, track):
-        """Most recently saved setup for this car/track ('latest_saved' --
-        the AC API cannot reveal which setup was actually loaded)."""
+        """The setup for the lap being stored.
+
+        Preferred: current_setup.ini, written live by the BL Setup Capture
+        Lua companion (the EXACT running setup, unsaved tweaks included).
+        Fallback: the most recently saved setup file for this car/track
+        ('latest_saved' -- the python API cannot see the loaded setup).
+        """
+        try:
+            live = os.path.join(APP_DIR, "current_setup.ini")
+            if os.path.isfile(live):
+                with open(live) as f:
+                    text = f.read()
+                if "VALUE" in text:
+                    return {"name": None, "ini": text, "folder": track,
+                            "src": "live"}
+        except Exception:
+            log("live setup read failed:\n" + traceback.format_exc())
         try:
             sdir = self.cfg.get("setups_dir") or setups.default_setups_dir()
-            return setups.find_latest_setup(sdir, car, track)
+            su = setups.find_latest_setup(sdir, car, track)
+            if su is not None:
+                su["src"] = "latest_saved"
+            return su
         except Exception:
             log("setup grab failed:\n" + traceback.format_exc())
             return None
@@ -667,6 +688,21 @@ class LeaderboardApp(object):
             self._set(self.l_track, "Track: " + self._combo_name(track, cfg))
             self._set(self.l_car, "Car: " + (car or "-"))
             self._refresh_board()
+            # Any current_setup.ini present AFTER this point was written by
+            # the Lua companion DURING this session -- stale ones can't leak.
+            try:
+                live = os.path.join(APP_DIR, "current_setup.ini")
+                if os.path.isfile(live):
+                    os.remove(live)
+            except Exception:
+                pass
+            try:
+                ac_root = self.cfg.get("ac_root") or trackmap.find_ac_root(APP_DIR)
+                res = luainstall.install(ac_root, APP_DIR)
+                if res and res != "current":
+                    log("lua companion " + res + " (enable 'BL Setup Capture' in the apps list once)")
+            except Exception:
+                pass
             self._publish_edges()
 
         # Decide (at this slow cadence) whether we're moving, so the per-frame
