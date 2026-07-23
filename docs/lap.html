@@ -91,6 +91,7 @@
   .setuptable { border-collapse:collapse; font-size:12px; }
   .setuptable th, .setuptable td { text-align:right; padding:3px 0 3px 34px;
     font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; }
+  .setuptable td.diff { color:#ffd60a; }
   .setuptable th:first-child, .setuptable td:first-child { text-align:left; padding-left:0;
     font-family:"Titillium Web",-apple-system,sans-serif; color:var(--muted); }
   .setuptable thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
@@ -781,9 +782,8 @@
         if(inSec){ cp.textContent += "  ·  " + (gs.text || ("T"+(gi+1))); break; }
       }
     }
-    var cols = CH.map(function(c){ return c.label.slice(0,4); });
     var html = "<thead><tr><th>Lap</th>";
-    CH.forEach(function(c){ html+="<th>"+c.label.slice(0,3)+"</th>"; });
+    CH.forEach(function(c){ html+="<th>"+c.label+"</th>"; });
     html += "<th>Gap</th></tr></thead><tbody>";
     var p = primary && primary.shown && primary.data ? sampleAt(primary.data, cursor) : null;
     sl.forEach(function(l){
@@ -916,27 +916,19 @@
         "'></span> "+(l.trophy? l.trophy+" ":"")+esc(l.rec.user)+"</th>";
     });
     html+="</tr></thead><tbody>";
+    var pIdx=withSetup.indexOf(primary); if(pIdx<0) pIdx=0;
     klist.forEach(function(k){
       var vals=parsed.map(function(p){ return p[k]; });
       html+="<tr><td>"+esc(k)+"</td>";
-      vals.forEach(function(v){
-        html+="<td>"+(v==null?"—":esc(v))+"</td>";
+      vals.forEach(function(v, vi){
+        var diff = vi!==pIdx && v!==vals[pIdx];
+        html+="<td"+(diff?" class='diff'":"")+">"+(v==null?"—":esc(v))+"</td>";
       });
       html+="</tr>";
     });
     var tbl=document.createElement("table"); tbl.className="setuptable";
     tbl.innerHTML=html+"</tbody>";
     body.appendChild(tbl);
-    var note=document.createElement("div"); note.className="secmuted";
-    note.style.marginTop="8px";
-    var srcs=withSetup.map(function(l){ return l.data.setup.src||"latest_saved"; });
-    var nLive=srcs.filter(function(x){ return x==="live"; }).length;
-    note.textContent = nLive===srcs.length
-      ? "Setups captured live from the sim — the exact setup each lap was driven on."
-      : nLive
-        ? "Some setups captured live from the sim; others are the most recently saved file when the lap was recorded."
-        : "Setup = the most recently saved setup for this car/track when the lap was recorded.";
-    body.appendChild(note);
   }
 
   function renderSectors(sl){
