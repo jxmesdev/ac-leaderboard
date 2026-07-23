@@ -34,11 +34,12 @@ APP_NAME = "AC Leaderboard"
 #   1 = + dbg() file logging with fsync (debug.log breadcrumbs)     [SURVIVED]
 #   2 = + the acl_core imports                                      [SURVIVED]
 #   3 = + Config/Store/LapRecorder objects                          [SURVIVED]
-#   -- old level 4 (everything below at once) CRASHED; now split: --
-#   4 = + class validate closure + live per-frame update machinery
-#   5 = + window dressing (setTitle/setBackgroundOpacity/drawBorder/big size)
-#   6 = + all the labels (track/car/status/leaderboard rows)
-#   7 = full UI (driver-grid + auto-capture buttons)   [= old level 4]
+#   -- old level 4 (closure + live update together) CRASHED; split again: --
+#   4 = + class validate CLOSURE only (acUpdate still returns immediately)
+#   5 = + live per-frame update machinery (_app.update runs each frame)
+#   6 = + window dressing (setTitle/setBackgroundOpacity/drawBorder/big size)
+#   7 = + all the labels (track/car/status/leaderboard rows)
+#   8 = full UI (driver-grid + auto-capture buttons)
 # =============================================================================
 DIAG_LEVEL = int(os.environ.get("ACL_DIAG_LEVEL", "4"))
 
@@ -172,10 +173,10 @@ class LeaderboardApp(object):
 
     # -- construction -----------------------------------------------------
     def build(self):
-        # Ladder gates: level 5 adds window dressing, 6 adds labels, 7 adds
-        # buttons. (Levels below 5 never call build() -- they use _bare_build.)
-        with_labels = DIAG_LEVEL >= 6
-        with_buttons = DIAG_LEVEL >= 7 and not DIAG_NO_BUTTONS
+        # Ladder gates: level 6 adds window dressing, 7 adds labels, 8 adds
+        # buttons. (Levels below 6 never call build() -- they use _bare_build.)
+        with_labels = DIAG_LEVEL >= 7
+        with_buttons = DIAG_LEVEL >= 8 and not DIAG_NO_BUTTONS
 
         driver_grid_rows = (MAX_DRIVERS + DRIVER_COLS - 1) // DRIVER_COLS
         win_h = 150 + driver_grid_rows * 26 + 140 + self._rows * ROW_H
@@ -663,12 +664,13 @@ def acMain(ac_version):
         if DIAG_LEVEL >= 3:
             _app = LeaderboardApp()   # Config/Store/LapRecorder objects
             dbg("acMain: objects created")
-        if DIAG_LEVEL >= 5:
-            _app.build()              # dressing (5) / +labels (6) / +buttons (7)
+        if DIAG_LEVEL >= 6:
+            _app.build()              # dressing (6) / +labels (7) / +buttons (8)
             dbg("acMain: build ok")
-        elif DIAG_LEVEL == 4:
-            # Bare window/field, but the CLASS validate closure + live update
-            # machinery handle Enter (the pending-driver path).
+        elif DIAG_LEVEL in (4, 5):
+            # Bare window/field, but the CLASS validate closure handles Enter.
+            # Level 4: acUpdate still returns immediately (closure only).
+            # Level 5: acUpdate additionally runs _app.update each frame.
             _bare_build(APP_NAME, _app._make_validate_cb())
             _app.in_newuser = _bare_input
             dbg("acMain: bare build + class validate")
@@ -687,7 +689,7 @@ def acMain(ac_version):
 
 
 def acUpdate(deltaT):
-    if DIAG_LEVEL < 4 or _app is None:
+    if DIAG_LEVEL < 5 or _app is None:
         return   # bare modes: identical to the test app's empty acUpdate
     try:
         _app.update(deltaT)
@@ -696,7 +698,7 @@ def acUpdate(deltaT):
 
 
 def acShutdown():
-    if DIAG_LEVEL < 4 or _app is None:
+    if DIAG_LEVEL < 5 or _app is None:
         return
     try:
         _app.store.save()
