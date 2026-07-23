@@ -10,6 +10,7 @@
 <title>Lap Telemetry · Bradford Leaderboard</title>
 <style>
   :root {
+    color-scheme: dark;
     --bg:#0a0a0b; --panel:#111113; --panel2:#19191c; --text:#edf2e4;
     --muted:#8b9384; --accent:#b8ff00; --line:#26262b;
     --gold:#b8ff00; --silver:#c8d2dc; --bronze:#cd8b4f; --danger:#ff5252;
@@ -58,6 +59,15 @@
   input.swatch::-webkit-color-swatch { border:none; }
   input.swatch::-moz-color-swatch { border:none; }
   .lap .nm { font-weight:600; }
+  #colorpop { position:fixed; z-index:30; background:var(--panel);
+    border:1px solid var(--line); padding:8px; display:none; }
+  #colorpop .cells { display:grid; grid-template-columns:repeat(5, 18px); gap:6px; }
+  #colorpop .cell { width:18px; height:18px; cursor:pointer; border:1px solid var(--line); }
+  #colorpop .cell:hover { border-color:var(--text); }
+  #colorpop .custom { margin-top:8px; display:flex; align-items:center; gap:6px;
+    font:600 10px "Chakra Petch",sans-serif; text-transform:uppercase;
+    letter-spacing:.6px; color:var(--muted); cursor:pointer; }
+  #colorpop .custom:hover { color:var(--accent); }
   .lap .tm { margin-left:auto; font-variant-numeric:tabular-nums;
     font-family:ui-monospace,Menlo,monospace; color:var(--muted); }
   .lap .dl { font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; font-size:12px; }
@@ -270,6 +280,43 @@
   }).catch(function(e){ fail("Could not load leaderboard data. " + e.message); });
 
   // ---- lap selection --------------------------------------------------
+  function setLapColor(l, c){
+    l.color=c;
+    try { localStorage.setItem("aclc2:"+l.rec.telemetry, c); } catch(err) {}
+    renderLapList(); scheduleRender();
+  }
+
+  // on-brand colour popover: palette grid first, native picker as "custom"
+  var colorPop=null;
+  function closeColorPop(){ if(colorPop){ colorPop.style.display="none"; } }
+  function openColorPop(l, anchor){
+    if(!colorPop){
+      colorPop=document.createElement("div"); colorPop.id="colorpop";
+      document.body.appendChild(colorPop);
+      document.addEventListener("click", function(e){
+        if(colorPop.style.display!=="none" && !colorPop.contains(e.target)) closeColorPop();
+      }, true);
+      document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeColorPop(); });
+    }
+    colorPop.innerHTML="";
+    var cells=document.createElement("div"); cells.className="cells";
+    PALETTE.forEach(function(c){
+      var d=document.createElement("div"); d.className="cell"; d.style.background=c;
+      d.title=c;
+      d.addEventListener("click", function(){ setLapColor(l, c); closeColorPop(); });
+      cells.appendChild(d);
+    });
+    colorPop.appendChild(cells);
+    var cust=document.createElement("div"); cust.className="custom";
+    cust.textContent="Custom…";
+    cust.addEventListener("click", function(){ closeColorPop(); anchor.click2(); });
+    colorPop.appendChild(cust);
+    var r=anchor.getBoundingClientRect();
+    colorPop.style.display="block";
+    colorPop.style.left=Math.min(r.left, window.innerWidth-140)+"px";
+    colorPop.style.top=(r.bottom+6)+"px";
+  }
+
   function renderLapList(){
     var box=document.getElementById("laps"); box.innerHTML="";
     laps.forEach(function(l){
@@ -278,11 +325,16 @@
       cb.addEventListener("change",function(){ toggleLap(l, cb.checked); });
       var sw=document.createElement("input"); sw.type="color"; sw.className="swatch";
       sw.value=l.color; sw.title="Lap colour";
-      sw.addEventListener("click", function(ev){ ev.stopPropagation(); });
+      var suppress=false;
+      sw.click2=function(){ suppress=true; sw.click(); suppress=false; };
+      sw.addEventListener("click", function(ev){
+        ev.stopPropagation();
+        if(suppress) return;           // "Custom…": let the native picker open
+        ev.preventDefault();
+        openColorPop(l, sw);
+      });
       sw.addEventListener("input", function(){
-        l.color=sw.value;
-        try { localStorage.setItem("aclc2:"+l.rec.telemetry, l.color); } catch(err) {}
-        scheduleRender();
+        setLapColor(l, sw.value);
       });
       var nm=document.createElement("span"); nm.className="nm";
       nm.textContent=(l.trophy? l.trophy+" ":"")+l.rec.user;
