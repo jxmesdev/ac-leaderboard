@@ -839,6 +839,27 @@
       for(var i=0;i<n;i++){ var p=P(X[i],Z[i]); if(i===0)ctx.moveTo(p[0],p[1]); else ctx.lineTo(p[0],p[1]); }
       ctx.stroke(); ctx.globalAlpha=1;
     });
+    // sector boundary lines across the track (from the primary's splits)
+    var sb = (primary && primary.data) ? sectorBounds() : null;
+    if(sb && sb.length > 1){
+      ctx.lineWidth=2;
+      for(var bi=0; bi<sb.length; bi++){
+        if(bi===0 && e) continue;      // edges mode already draws start/finish
+        var pb=sb[bi][0];
+        var sA=sampleAt(primary.data, Math.max(0, pb-0.002));
+        var sB=sampleAt(primary.data, Math.min(0.9999, pb+0.002));
+        if(!sA || !sB) continue;
+        var tbx=sB.x-sA.x, tbz=sB.z-sA.z, tbl=Math.sqrt(tbx*tbx+tbz*tbz);
+        if(tbl<1e-6) continue;
+        var nbx=-tbz/tbl, nbz=tbx/tbl;
+        var cbx=(sA.x+sB.x)/2, cbz=(sA.z+sB.z)/2;
+        var mA=P(cbx+nbx*9, cbz+nbz*9), mB=P(cbx-nbx*9, cbz-nbz*9);
+        ctx.strokeStyle=bi===0 ? css("--text") : css("--muted");
+        ctx.globalAlpha=0.85;
+        ctx.beginPath(); ctx.moveTo(mA[0],mA[1]); ctx.lineTo(mB[0],mB[1]); ctx.stroke();
+        ctx.globalAlpha=1;
+      }
+    }
     // turn numbers from AC's sections.ini (real data, published per track)
     if(globalSections && primary && primary.data){
       var fdm=primary.data;
