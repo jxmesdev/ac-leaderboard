@@ -20,9 +20,11 @@ if APP_DIR not in sys.path:
 import ac  # provided by Assetto Corsa
 
 from acl_core import ac_data, config, storage, telemetry, trackmap
-from acl_core.git_sync import GitSync
 from acl_core.leaderboard import leaderboard_for
 from acl_core.timefmt import format_ms
+# NOTE: acl_core.git_sync (which imports threading + subprocess) is imported
+# lazily inside __init__ so DIAG_NO_GIT can keep those out of the process
+# entirely -- testing whether they are what crashes AC's text-field Enter.
 
 APP_NAME = "AC Leaderboard"
 
@@ -31,11 +33,15 @@ APP_NAME = "AC Leaderboard"
 # loop is NOT the crash cause: crashed on Enter even with this True.)
 DIAG_INERT_UPDATE = True
 
-# One-shot diagnostic: when True, build() creates NO interactive buttons (no
-# driver-grid buttons, no auto-capture button) -- only labels + the one text
-# field. Isolates whether the Enter crash comes from interactive widgets around
-# the field (crash stops) or from label count (crash persists). Remove once done.
-DIAG_NO_BUTTONS = True
+# (Ruled out: the bare test app ran ~58 widgets with no crash, so widget count
+# is NOT the cause. Buttons ruled out too -- crashed with none. Full UI restored.)
+DIAG_NO_BUTTONS = False
+
+# One-shot diagnostic: when True, the git machinery is never imported or created,
+# so threading + subprocess never enter AC's embedded interpreter. This is the
+# prime remaining suspect for the native Enter crash (the only difference between
+# the safe bare test app and the crashing real app). Remove once identified.
+DIAG_NO_GIT = True
 
 # Layout constants (pixels).
 WIN_W = 380
@@ -86,16 +92,20 @@ class LeaderboardApp(object):
         self.window = None
         self.cfg = config.load(APP_DIR)
         self.store = storage.Store(self.cfg.data_dir).load()
-        self.git = GitSync(
-            self.cfg.repo_path,
-            branch=self.cfg.get("git_branch"),
-            remote=self.cfg.get("git_remote"),
-            author_name=self.cfg.get("author_name"),
-            author_email=self.cfg.get("author_email"),
-            git_exe=self.cfg.get("git_exe"),
-            on_status=self._on_git_status,
-            logger=dbg,   # file-only logger: safe to call from the git thread
-        )
+        if DIAG_NO_GIT:
+            self.git = None   # no threading/subprocess loaded at all
+        else:
+            from acl_core.git_sync import GitSync
+            self.git = GitSync(
+                self.cfg.repo_path,
+                branch=self.cfg.get("git_branch"),
+                remote=self.cfg.get("git_remote"),
+                author_name=self.cfg.get("author_name"),
+                author_email=self.cfg.get("author_email"),
+                git_exe=self.cfg.get("git_exe"),
+                on_status=self._on_git_status,
+                logger=dbg,   # file-only logger: safe to call from the git thread
+            )
         self._last_git_log = ""
 
         # session state
@@ -410,6 +420,8 @@ class LeaderboardApp(object):
         self._set(self.b_auto, self._auto_label())
 
     def _publish(self, message, force=False, extra_paths=None):
+        if self.git is None:
+            return   # DIAG_NO_GIT: git machinery disabled
         if not self.cfg.repo_configured():
             self._set_status("not a git clone -- cannot push")
             return
@@ -483,7 +495,7 @@ class LeaderboardApp(object):
 
         # Mirror git status to the log from the MAIN thread (the worker thread
         # must never call ac.*). Cheap string compare each frame.
-        if self.git.last_status != self._last_git_log:
+        if self.git is not None and self.git.last_status != self._last_git_log:
             self._last_git_log = self.git.last_status
             log("git status -> " + self.git.last_status)
 
