@@ -1,0 +1,3 @@
+acMain: start BUILD=minimal-build-v5 DIAG_TELEMETRY=True
+build ok (MINIMAL: field only)
+acMain: build ok
