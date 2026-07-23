@@ -290,6 +290,24 @@
             slugjs(primary.rec.config)+"__edges.json")
       .then(function(eg){ globalEdges=eg; scheduleRender(); })
       .catch(function(){});
+    var turnsOverride=null;
+    getJSON("data/trackmaps/"+slugjs(primary.rec.track)+"__"+
+            slugjs(primary.rec.config)+"__turns.json")
+      .then(function(tj){ turnsOverride=tj.turns||null; relabelSections(); scheduleRender(); })
+      .catch(function(){});
+    function relabelSections(){
+      if(!globalSections) return;
+      globalSections.forEach(function(sec){
+        if(sec.label==null) return;
+        var t=(sec.text||"").trim();
+        if(turnsOverride && turnsOverride[t]!=null){
+          sec.label="T"+turnsOverride[t];          // curated official number
+        } else {
+          var m=t.match(/^turn\s*0*(\d+)$/i);
+          if(m) sec.label="T"+m[1];                // track names it "Turn N"
+        }
+      });
+    }
     getJSON("data/trackmaps/"+slugjs(primary.rec.track)+"__"+
             slugjs(primary.rec.config)+"__sections.json")
       .then(function(sc){
@@ -313,6 +331,7 @@
           Object.keys(byName).forEach(function(t){
             byName[t].sec.label=t.replace(/\s+(Bend|Curve|Corner|Straight|Hill)$/i, "");
           });
+          relabelSections();
         }
         scheduleRender();
       })
