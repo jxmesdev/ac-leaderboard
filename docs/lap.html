@@ -90,13 +90,11 @@
   .empty { padding:40px; text-align:center; color:var(--muted); }
   .card > h2.tgl { cursor:pointer; user-select:none; position:relative; }
   .card > h2.tgl::after { content:""; position:absolute; right:14px; top:50%;
-    width:5px; height:5px;
-    border-right:1.5px solid var(--muted); border-bottom:1.5px solid var(--muted);
-    transition:transform .15s;
-    transform:translateY(-50%) scaleY(-1) rotate(45deg); }  /* chevron up */
+    width:9px; height:6px; margin-top:-3px;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpolyline points='1,1.2 5,4.8 9,1.2' fill='none' stroke='%238b9384' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+    transition:transform .15s; transform:scaleY(-1); }      /* chevron up */
   .card.collapsed > h2.tgl { border-bottom:none; }
-  .card.collapsed > h2.tgl::after {
-    transform:translateY(-50%) scaleY(1) rotate(45deg); }   /* chevron down */
+  .card.collapsed > h2.tgl::after { transform:scaleY(1); }  /* chevron down */
   .card.collapsed > *:not(h2) { display:none !important; }
   .card.anim { transition:height .25s ease; overflow:hidden; }
   .sectors { margin-top:16px; }
