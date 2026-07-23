@@ -19,6 +19,3 @@ _localdata/
 
 # Live setup written by the BL Setup Capture Lua companion
 current_setup.ini
-
-# In-game breadcrumb log (rewritten every AC start; keep out of git)
-debug.log
