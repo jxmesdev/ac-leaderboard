@@ -839,23 +839,46 @@
       for(var i=0;i<n;i++){ var p=P(X[i],Z[i]); if(i===0)ctx.moveTo(p[0],p[1]); else ctx.lineTo(p[0],p[1]); }
       ctx.stroke(); ctx.globalAlpha=1;
     });
-    // sector boundary lines across the track (from the primary's splits)
+    // sector boundary lines across the track (from the primary's splits),
+    // spanning edge to edge with an equal overhang on both sides
     var sb = (primary && primary.data) ? sectorBounds() : null;
     if(sb && sb.length > 1){
-      ctx.lineWidth=2;
+      function nearestOn(X, Z, px, pz){
+        var bi2=0, bd2=Infinity;
+        for(var k2=0;k2<X.length;k2++){
+          var ddx=X[k2]-px, ddz=Z[k2]-pz, q2=ddx*ddx+ddz*ddz;
+          if(q2<bd2){ bd2=q2; bi2=k2; }
+        }
+        return [X[bi2], Z[bi2]];
+      }
+      ctx.lineWidth=3;
+      ctx.strokeStyle=css("--accent");
       for(var bi=0; bi<sb.length; bi++){
         if(bi===0 && e) continue;      // edges mode already draws start/finish
         var pb=sb[bi][0];
-        var sA=sampleAt(primary.data, Math.max(0, pb-0.002));
-        var sB=sampleAt(primary.data, Math.min(0.9999, pb+0.002));
-        if(!sA || !sB) continue;
-        var tbx=sB.x-sA.x, tbz=sB.z-sA.z, tbl=Math.sqrt(tbx*tbx+tbz*tbz);
-        if(tbl<1e-6) continue;
-        var nbx=-tbz/tbl, nbz=tbx/tbl;
-        var cbx=(sA.x+sB.x)/2, cbz=(sA.z+sB.z)/2;
-        var mA=P(cbx+nbx*9, cbz+nbz*9), mB=P(cbx-nbx*9, cbz-nbz*9);
-        ctx.strokeStyle=bi===0 ? css("--text") : css("--muted");
-        ctx.globalAlpha=0.85;
+        var sC=sampleAt(primary.data, pb);
+        if(!sC) continue;
+        var wA, wB;
+        if(e){
+          // span the real track: nearest point on each edge, +2.5m overhang
+          var L=nearestOn(e.lx, e.lz, sC.x, sC.z);
+          var R=nearestOn(e.rx, e.rz, sC.x, sC.z);
+          var dx3=R[0]-L[0], dz3=R[1]-L[1], dl3=Math.sqrt(dx3*dx3+dz3*dz3);
+          if(dl3<1e-6) continue;
+          var ux3=dx3/dl3, uz3=dz3/dl3, ov=2.5;
+          wA=[L[0]-ux3*ov, L[1]-uz3*ov]; wB=[R[0]+ux3*ov, R[1]+uz3*ov];
+        } else {
+          // no edges: perpendicular to the lap direction, +-11m
+          var sA=sampleAt(primary.data, Math.max(0, pb-0.002));
+          var sB=sampleAt(primary.data, Math.min(0.9999, pb+0.002));
+          if(!sA || !sB) continue;
+          var tbx=sB.x-sA.x, tbz=sB.z-sA.z, tbl=Math.sqrt(tbx*tbx+tbz*tbz);
+          if(tbl<1e-6) continue;
+          var nbx=-tbz/tbl, nbz=tbx/tbl;
+          wA=[sC.x+nbx*11, sC.z+nbz*11]; wB=[sC.x-nbx*11, sC.z-nbz*11];
+        }
+        var mA=P(wA[0], wA[1]), mB=P(wB[0], wB[1]);
+        ctx.globalAlpha=0.9;
         ctx.beginPath(); ctx.moveTo(mA[0],mA[1]); ctx.lineTo(mB[0],mB[1]); ctx.stroke();
         ctx.globalAlpha=1;
       }
