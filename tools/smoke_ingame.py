@@ -52,19 +52,28 @@ app.acMain(1.0)
 
 app.acUpdate(0.6)                      # menus, no track yet
 
-# Load a session: Spa + Ferrari. The driver auto-attributes to the AC profile
-# name on session start (no text field -- it crashes AC on this build).
+# Load a session: Spa + Ferrari. NOTHING is auto-selected or auto-created --
+# drivers exist only by typing a new name or clicking an existing button.
 mock_ac.STATE.track = "spa"
 mock_ac.STATE.car = "ferrari_488_gt3"
-mock_ac.STATE.driver_name = "James"
-app.acUpdate(0.6)                         # session start -> auto-pick James
+app.acUpdate(0.6)                         # session start
 print("track label:", mock_ac.STATE.widgets[app._app.l_track]["text"])
 print("car label:  ", mock_ac.STATE.widgets[app._app.l_car]["text"])
+assert app._app.selected is None, "nothing should be auto-selected"
 
-# Add a driver by typing + Enter (validate -> pending -> acUpdate applies it).
+# Add drivers by typing + Enter (validate -> stash -> acUpdate applies it).
+mock_ac.validate(app._app.in_newuser, "James")
+app.acUpdate(1 / 60.0)
 mock_ac.validate(app._app.in_newuser, "Alex")
 app.acUpdate(1 / 60.0)
 print("driver buttons:", driver_button_texts())
+
+# Typing an existing name is an error and does NOT switch.
+mock_ac.validate(app._app.in_newuser, "james")
+app.acUpdate(1 / 60.0)
+assert app._app.selected == "Alex", "duplicate typing must not switch"
+assert "already exists" in app._app.status_text, app._app.status_text
+print("duplicate entry ->", app._app.status_text)
 
 # Regression check: a newly-added driver's button must be ON-SCREEN, not parked
 # at (-500, -500). (Bug: slots hidden as empty were never restored on add.)

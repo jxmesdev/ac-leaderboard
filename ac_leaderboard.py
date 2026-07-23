@@ -311,35 +311,24 @@ class LeaderboardApp(object):
                 except Exception:
                     pass
 
-    def _add_driver(self, name, select_existing=False):
+    def _add_driver(self, name):
         """Add a NEW driver (typed + Enter) and select them.
 
-        If the name already exists: typing it is an error (no switch -- use the
-        driver buttons to switch), but the session-start auto-pick passes
-        select_existing=True so returning drivers are still selected.
+        Typing an existing name is an error and does NOT switch -- use the
+        driver buttons to switch. There is no auto-select/auto-create from the
+        AC profile name; typing and clicking are the only two paths.
         """
         log("add_driver: start " + repr(name))
         name = (name or "").strip()
         if not name:
             return
         # Existing driver (case-insensitive)?
-        existing = None
         for u in self.users:
             if storage.norm(u) == storage.norm(name):
-                existing = u
-                break
-        if existing is not None:
-            if select_existing:
-                self.selected = existing
-                self.last_seen_best = 0
-                self._render_driver_grid()
-                self._refresh_board()
-                self._set_status("driver: " + existing)
-            else:
-                self._set_status("'" + existing + "' already exists -- "
+                self._set_status("'" + u + "' already exists -- "
                                  "click their name to switch")
-            log("add_driver: done (existing)")
-            return
+                log("add_driver: done (existing)")
+                return
         if len(self.users) >= MAX_DRIVERS:
             self._set_status("driver limit reached (" + str(MAX_DRIVERS) + ")")
             return
@@ -479,8 +468,6 @@ class LeaderboardApp(object):
             log("update: pending driver " + repr(name))
             if name:
                 self._add_driver(name)
-            else:
-                self._set_status("no AC driver name -- set it in Content Manager")
             if self.in_newuser is not None:
                 log("update: clearing input")
                 self._set(self.in_newuser, "")
@@ -515,7 +502,6 @@ class LeaderboardApp(object):
             self.recorder.reset()
             self._set(self.l_track, "Track: " + self._combo_name(track, cfg))
             self._set(self.l_car, "Car: " + (car or "-"))
-            self._auto_pick_driver()
             self._refresh_board()
 
         # Decide (at this slow cadence) whether we're moving, so the per-frame
@@ -526,16 +512,6 @@ class LeaderboardApp(object):
             self._poll_best_lap()
 
         self._apply_status()
-
-    def _auto_pick_driver(self):
-        """On session start, default the active driver to the AC profile name
-        (unless one is already selected). Runs in the update loop -- safe."""
-        if self.selected is not None:
-            return
-        name = ac_data.get_driver_name()
-        log("auto_pick_driver: " + repr(name))
-        if name:
-            self._add_driver(name, select_existing=True)
 
     def _sample_telemetry(self, dt):
         # Gated by self._moving in update(), so this only runs while driving.
