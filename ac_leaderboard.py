@@ -19,57 +19,12 @@ if APP_DIR not in sys.path:
 
 import ac  # provided by Assetto Corsa
 
+from acl_core import ac_data, config, storage, telemetry, trackmap
+from acl_core.git_sync import GitSync
+from acl_core.leaderboard import leaderboard_for
+from acl_core.timefmt import format_ms
+
 APP_NAME = "AC Leaderboard"
-
-# =============================================================================
-# DIAGNOSTIC LADDER. Everything obvious was ruled out individually (widgets,
-# buttons, update loop, git threading/subprocess) yet the app still crashes on
-# Enter while the bare test app survives 35+. So: start from an EXACT clone of
-# the bare test app inside THIS file and add one suspect back per level.
-#
-# On the rig: test Enter ~10x, then edit this ONE number, restart AC, repeat.
-# Report the highest level that survives.
-#
-#   0 = exact bare test app (field + counter label; ac.log only).  [SURVIVED]
-#   1 = + dbg() file logging with fsync (debug.log breadcrumbs)     [SURVIVED]
-#   2 = + the acl_core imports                                      [SURVIVED]
-#   3 = + Config/Store/LapRecorder objects                          [SURVIVED]
-#   -- CLOSURE-only level 4 CRASHED => CULPRIT FOUND: registering a CLOSURE
-#      with ac.addOnValidateListener crashes AC natively on Enter; a plain
-#      module-level function is fine (proven by levels 0-3, 10+ Enters each).
-#      THE FIX: validate is now a module-level function stashing into a module
-#      global. Remaining rungs verify the rest of the app on top of the fix: --
-#   4 = plain-function validate stashing the typed name (acUpdate inert)
-#   5 = + live per-frame update machinery (applies the typed name -> driver)
-#   6 = + window dressing (setTitle/setBackgroundOpacity/drawBorder/big size)
-#   7 = + all the labels (track/car/status/leaderboard rows)
-#   8 = full UI (driver-grid + auto-capture buttons)
-# =============================================================================
-DIAG_LEVEL = int(os.environ.get("ACL_DIAG_LEVEL", "4"))
-
-# Levels 0-3 imply: inert update loop, no git. These stay off until the crash
-# is found (both already individually ruled out as causes, but kept off so each
-# ladder level changes exactly ONE thing).
-DIAG_INERT_UPDATE = not os.environ.get("ACL_DIAG_FULL")
-DIAG_NO_BUTTONS = False
-DIAG_NO_GIT = not os.environ.get("ACL_DIAG_FULL")
-
-# acl_core imports are deferred so DIAG_LEVEL <= 1 loads NOTHING beyond `ac`
-# (byte-for-byte the bare test app's import footprint).
-ac_data = config = storage = telemetry = trackmap = None
-leaderboard_for = format_ms = None
-
-
-def _load_core():
-    global ac_data, config, storage, telemetry, trackmap
-    global leaderboard_for, format_ms
-    from acl_core import ac_data as _acd, config as _cfg, storage as _sto, \
-        telemetry as _tel, trackmap as _tmp
-    from acl_core.leaderboard import leaderboard_for as _lb
-    from acl_core.timefmt import format_ms as _fm
-    ac_data, config, storage = _acd, _cfg, _sto
-    telemetry, trackmap = _tel, _tmp
-    leaderboard_for, format_ms = _lb, _fm
 
 # Layout constants (pixels).
 WIN_W = 380
@@ -142,20 +97,16 @@ class LeaderboardApp(object):
         self.window = None
         self.cfg = config.load(APP_DIR)
         self.store = storage.Store(self.cfg.data_dir).load()
-        if DIAG_NO_GIT:
-            self.git = None   # no threading/subprocess loaded at all
-        else:
-            from acl_core.git_sync import GitSync
-            self.git = GitSync(
-                self.cfg.repo_path,
-                branch=self.cfg.get("git_branch"),
-                remote=self.cfg.get("git_remote"),
-                author_name=self.cfg.get("author_name"),
-                author_email=self.cfg.get("author_email"),
-                git_exe=self.cfg.get("git_exe"),
-                on_status=self._on_git_status,
-                logger=dbg,   # file-only logger: safe to call from the git thread
-            )
+        self.git = GitSync(
+            self.cfg.repo_path,
+            branch=self.cfg.get("git_branch"),
+            remote=self.cfg.get("git_remote"),
+            author_name=self.cfg.get("author_name"),
+            author_email=self.cfg.get("author_email"),
+            git_exe=self.cfg.get("git_exe"),
+            on_status=self._on_git_status,
+            logger=dbg,   # file-only logger: safe to call from the git thread
+        )
         self._last_git_log = ""
 
         # session state
@@ -197,11 +148,6 @@ class LeaderboardApp(object):
 
     # -- construction -----------------------------------------------------
     def build(self):
-        # Ladder gates: level 6 adds window dressing, 7 adds labels, 8 adds
-        # buttons. (Levels below 6 never call build() -- they use _bare_build.)
-        with_labels = DIAG_LEVEL >= 7
-        with_buttons = DIAG_LEVEL >= 8 and not DIAG_NO_BUTTONS
-
         driver_grid_rows = (MAX_DRIVERS + DRIVER_COLS - 1) // DRIVER_COLS
         win_h = 150 + driver_grid_rows * 26 + 140 + self._rows * ROW_H
         self.window = ac.newApp(APP_NAME)
@@ -214,66 +160,61 @@ class LeaderboardApp(object):
             pass
 
         y = 32
-        if with_labels:
-            self.l_track = self._label("Track: -", MARGIN, y, 13)
-            y += 18
-            self.l_car = self._label("Car: -", MARGIN, y, 13)
-            y += 26
+        self.l_track = self._label("Track: -", MARGIN, y, 13)
+        y += 18
+        self.l_car = self._label("Car: -", MARGIN, y, 13)
+        y += 26
 
-            self._label("Driver  (click to select):", MARGIN, y, 13)
-            y += 20
+        self._label("Driver  (click to select):", MARGIN, y, 13)
+        y += 20
 
         # Clickable driver grid (2 columns). Empty slots are parked off-screen.
-        if with_buttons:
-            col_w = (WIN_W - (DRIVER_COLS + 1) * MARGIN) // DRIVER_COLS
-            grid_y0 = y
-            for i in range(MAX_DRIVERS):
-                col = i % DRIVER_COLS
-                row = i // DRIVER_COLS
-                bx = MARGIN + col * (col_w + MARGIN)
-                by = grid_y0 + row * 26
-                bid = ac.addButton(self.window, "")
-                ac.setPosition(bid, bx, by)
-                ac.setSize(bid, col_w, 22)
-                ac.addOnClickedListener(bid, self._make_pick_cb(i))
-                try:
-                    ac.setFontSize(bid, 13)
-                except Exception:
-                    pass
-                self.driver_btns.append(bid)
-                self.driver_btn_pos.append((bx, by))
-            y = grid_y0 + driver_grid_rows * 26 + 6
+        col_w = (WIN_W - (DRIVER_COLS + 1) * MARGIN) // DRIVER_COLS
+        grid_y0 = y
+        for i in range(MAX_DRIVERS):
+            col = i % DRIVER_COLS
+            row = i // DRIVER_COLS
+            bx = MARGIN + col * (col_w + MARGIN)
+            by = grid_y0 + row * 26
+            bid = ac.addButton(self.window, "")
+            ac.setPosition(bid, bx, by)
+            ac.setSize(bid, col_w, 22)
+            ac.addOnClickedListener(bid, self._make_pick_cb(i))
+            try:
+                ac.setFontSize(bid, 13)
+            except Exception:
+                pass
+            self.driver_btns.append(bid)
+            self.driver_btn_pos.append((bx, by))
+        y = grid_y0 + driver_grid_rows * 26 + 6
 
         # Add a driver: type a name + Enter. (No "+ Add me" button -- it triggered
         # a native crash on this rig; typing is the single, reliable path.)
-        if with_labels:
-            self._label("New driver (type + Enter):", MARGIN, y, 12)
-            y += 16
+        self._label("New driver (type + Enter):", MARGIN, y, 12)
+        y += 16
         self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 22,
                                            _on_validate_typed)
         y += 28
-        if with_buttons:
-            self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
-                                       self.on_toggle_auto)
-            y += 28
+        self.b_auto = self._button(self._auto_label(), MARGIN, y, 150, 22,
+                                   self.on_toggle_auto)
+        y += 28
 
-        if with_labels:
-            # Status line.
-            self.l_status = self._label("", MARGIN, y, 12)
-            y += 22
+        # Status line.
+        self.l_status = self._label("", MARGIN, y, 12)
+        y += 22
 
-            # Leaderboard header + rows (4 aligned columns).
-            self._label("#", self.cx_pos, y, 13)
-            self._label("Driver", self.cx_user, y, 13)
-            self._label("Time", self.cx_time, y, 13)
-            self._label("Gap", self.cx_gap, y, 13)
+        # Leaderboard header + rows (4 aligned columns).
+        self._label("#", self.cx_pos, y, 13)
+        self._label("Driver", self.cx_user, y, 13)
+        self._label("Time", self.cx_time, y, 13)
+        self._label("Gap", self.cx_gap, y, 13)
+        y += ROW_H
+        for _ in range(self._rows):
+            self.row_pos.append(self._label("", self.cx_pos, y, 13))
+            self.row_user.append(self._label("", self.cx_user, y, 13))
+            self.row_time.append(self._label("", self.cx_time, y, 13))
+            self.row_gap.append(self._label("", self.cx_gap, y, 13))
             y += ROW_H
-            for _ in range(self._rows):
-                self.row_pos.append(self._label("", self.cx_pos, y, 13))
-                self.row_user.append(self._label("", self.cx_user, y, 13))
-                self.row_time.append(self._label("", self.cx_time, y, 13))
-                self.row_gap.append(self._label("", self.cx_gap, y, 13))
-                y += ROW_H
 
         if not self.cfg.repo_configured():
             self._set_status("not a git clone -- times save locally, no push")
@@ -370,36 +311,47 @@ class LeaderboardApp(object):
                 except Exception:
                     pass
 
-    def _add_driver(self, name):
+    def _add_driver(self, name, select_existing=False):
+        """Add a NEW driver (typed + Enter) and select them.
+
+        If the name already exists: typing it is an error (no switch -- use the
+        driver buttons to switch), but the session-start auto-pick passes
+        select_existing=True so returning drivers are still selected.
+        """
         log("add_driver: start " + repr(name))
         name = (name or "").strip()
         if not name:
             return
-        if len(self.users) >= MAX_DRIVERS and name not in self.users:
-            self._set_status("driver limit reached (" + str(MAX_DRIVERS) + ")")
-            return
-        log("add_driver: add_user")
-        added = self.store.add_user(name)
-        self.users = self.store.all_users()
-        # Select using the canonical stored casing.
-        self.selected = name
+        # Existing driver (case-insensitive)?
+        existing = None
         for u in self.users:
             if storage.norm(u) == storage.norm(name):
-                self.selected = u
+                existing = u
                 break
+        if existing is not None:
+            if select_existing:
+                self.selected = existing
+                self.last_seen_best = 0
+                self._render_driver_grid()
+                self._refresh_board()
+                self._set_status("driver: " + existing)
+            else:
+                self._set_status("'" + existing + "' already exists -- "
+                                 "click their name to switch")
+            log("add_driver: done (existing)")
+            return
+        if len(self.users) >= MAX_DRIVERS:
+            self._set_status("driver limit reached (" + str(MAX_DRIVERS) + ")")
+            return
+        self.store.add_user(name)
+        self.users = self.store.all_users()
+        self.selected = name
         self.last_seen_best = 0
-        log("add_driver: render_grid")
         self._render_driver_grid()
-        log("add_driver: refresh_board")
         self._refresh_board()
-        if added:
-            log("add_driver: store.save")
-            self.store.save()
-            self._set_status("added driver: " + self.selected)
-            log("add_driver: publish")
-            self._publish("Add driver " + self.selected)
-        else:
-            self._set_status("driver: " + self.selected)
+        self.store.save()
+        self._set_status("added driver: " + name)
+        self._publish("Add driver " + name)
         log("add_driver: done")
 
     # -- recording --------------------------------------------------------
@@ -465,8 +417,6 @@ class LeaderboardApp(object):
         self._set(self.b_auto, self._auto_label())
 
     def _publish(self, message, force=False, extra_paths=None):
-        if self.git is None:
-            return   # DIAG_NO_GIT: git machinery disabled
         if not self.cfg.repo_configured():
             self._set_status("not a git clone -- cannot push")
             return
@@ -490,7 +440,7 @@ class LeaderboardApp(object):
 
     def _refresh_board(self):
         if not self.row_pos:
-            return   # ladder levels without leaderboard labels
+            return   # board labels not built (defensive)
         rows = leaderboard_for(self.store.records, self.track,
                                self.track_config, self.car)
         for i in range(self._rows):
@@ -536,14 +486,9 @@ class LeaderboardApp(object):
                 self._set(self.in_newuser, "")
             log("update: pending handled")
 
-        if DIAG_INERT_UPDATE:
-            # Full UI is built, but the update loop makes zero ac.* calls. If
-            # Enter no longer crashes, the car-state polling below is the cause.
-            return
-
         # Mirror git status to the log from the MAIN thread (the worker thread
         # must never call ac.*). Cheap string compare each frame.
-        if self.git is not None and self.git.last_status != self._last_git_log:
+        if self.git.last_status != self._last_git_log:
             self._last_git_log = self.git.last_status
             log("git status -> " + self.git.last_status)
 
@@ -590,7 +535,7 @@ class LeaderboardApp(object):
         name = ac_data.get_driver_name()
         log("auto_pick_driver: " + repr(name))
         if name:
-            self._add_driver(name)
+            self._add_driver(name, select_existing=True)
 
     def _sample_telemetry(self, dt):
         # Gated by self._moving in update(), so this only runs while driving.
@@ -626,86 +571,23 @@ class LeaderboardApp(object):
 # -- module-level AC entry points -----------------------------------------
 _app = None
 
-# Bare-mode state (DIAG_LEVEL 0-3): an exact clone of the bare test app that
-# survived 35 Enters -- module-level widgets, module-level plain-function
-# validate, counter label, ac.log. Levels differ only in what ELSE is loaded.
-_bare_label = None
-_bare_input = None
-_bare_count = 0
-
-
-def _bare_validate(value):
-    global _bare_count
-    _bare_count += 1
-    try:
-        ac.log("[ladder] enter #" + str(_bare_count) + " -> " + repr(value))
-        ac.console("[ladder] enter #" + str(_bare_count))
-    except Exception:
-        pass
-    if DIAG_LEVEL >= 1:
-        dbg("enter #" + str(_bare_count) + " -> " + repr(value))
-    if _bare_label is not None:
-        try:
-            ac.setText(_bare_label, "Enters survived: " + str(_bare_count))
-        except Exception:
-            pass
-
-
-def _bare_build(window_name, validate_cb=None):
-    global _bare_label, _bare_input
-    app = ac.newApp(window_name)
-    ac.setSize(app, 340, 120)
-    _bare_label = ac.addLabel(app, "LEVEL " + str(DIAG_LEVEL) +
-                              ": type + Enter ~10x")
-    ac.setPosition(_bare_label, 10, 30)
-    ac.setFontSize(_bare_label, 14)
-    _bare_input = ac.addTextInput(app, "")
-    ac.setPosition(_bare_input, 10, 58)
-    ac.setSize(_bare_input, 320, 26)
-    ac.addOnValidateListener(_bare_input, validate_cb or _bare_validate)
-
 
 def acMain(ac_version):
     global _app
-    if DIAG_LEVEL >= 1:
-        dbg_reset()
-        dbg("acMain: start LEVEL=" + str(DIAG_LEVEL))
+    dbg_reset()
+    dbg("acMain: start")
     try:
-        if DIAG_LEVEL >= 2:
-            _load_core()          # acl_core (+ json/zlib/struct) enters the process
-            if DIAG_LEVEL >= 1:
-                dbg("acMain: core imported")
-        if DIAG_LEVEL >= 3:
-            _app = LeaderboardApp()   # Config/Store/LapRecorder objects
-            dbg("acMain: objects created")
-        if DIAG_LEVEL >= 6:
-            _app.build()              # dressing (6) / +labels (7) / +buttons (8)
-            dbg("acMain: build ok")
-        elif DIAG_LEVEL in (4, 5):
-            # Bare window/field with the FIXED plain-function validate handler.
-            # Level 4: acUpdate still returns immediately (handler only).
-            # Level 5: acUpdate additionally runs _app.update each frame,
-            #          which consumes the typed name and adds the driver.
-            _bare_build(APP_NAME, _on_validate_typed)
-            _app.in_newuser = _bare_input
-            dbg("acMain: bare build + plain-function validate")
-        else:
-            _bare_build(APP_NAME)     # exact bare-test window + field
-            if DIAG_LEVEL >= 1:
-                dbg("acMain: bare build ok")
+        _app = LeaderboardApp().build()
+        dbg("acMain: build ok")
     except Exception:
-        if DIAG_LEVEL >= 1:
-            dbg("acMain error:\n" + traceback.format_exc())
-        try:
-            ac.log("[ac_leaderboard] acMain error:\n" + traceback.format_exc())
-        except Exception:
-            pass
+        dbg("acMain error:\n" + traceback.format_exc())
+        log("acMain error:\n" + traceback.format_exc())
     return APP_NAME
 
 
 def acUpdate(deltaT):
-    if DIAG_LEVEL < 5 or _app is None:
-        return   # bare modes: identical to the test app's empty acUpdate
+    if _app is None:
+        return
     try:
         _app.update(deltaT)
     except Exception:
@@ -713,7 +595,7 @@ def acUpdate(deltaT):
 
 
 def acShutdown():
-    if DIAG_LEVEL < 5 or _app is None:
+    if _app is None:
         return
     try:
         _app.store.save()
