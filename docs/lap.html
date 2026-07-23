@@ -34,7 +34,8 @@
     text-transform:uppercase; letter-spacing:1.2px; }
   .top { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
   h1 { font-size:20px; margin:0 0 2px; }
-  #title { font:italic 600 20px "Chakra Petch", sans-serif; text-transform:uppercase; letter-spacing:.4px; }
+  #title { font:italic 600 20px "Chakra Petch", sans-serif; text-transform:uppercase;
+    letter-spacing:.4px; margin-bottom:8px; }
   .sub { color:var(--muted); font-size:13px; }
   .grid { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; margin-top:16px; }
   @media (max-width:820px){ .grid { grid-template-columns:1fr; } }
@@ -55,7 +56,8 @@
   input.swatch::-webkit-color-swatch { border:none; }
   input.swatch::-moz-color-swatch { border:none; }
   .lap .nm { font-weight:600; }
-  .lap .tm { margin-left:auto; font-variant-numeric:tabular-nums;
+  .lap input.prim { margin-left:auto; accent-color:var(--accent); cursor:pointer; }
+  .lap .tm { font-variant-numeric:tabular-nums;
     font-family:ui-monospace,Menlo,monospace; color:var(--muted); }
   .lap .dl { font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; font-size:12px; }
   .traces { margin-top:16px; }
@@ -87,7 +89,7 @@
     font-family:"Titillium Web",-apple-system,sans-serif; }
   .sectable thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
-  footer { margin-top:40px; color:var(--muted); font-size:11px; text-align:center;
+  footer { margin-top:64px; color:var(--muted); font-size:11px; text-align:center;
     font-family:"Chakra Petch",sans-serif; text-transform:uppercase; letter-spacing:1.2px; }
   footer .fbrand { color:var(--accent); }
   .secmuted { color:var(--muted); font-size:12px; }
@@ -120,7 +122,7 @@
         </div>
       </div>
       <div class="card">
-        <h2>Laps — click to overlay</h2>
+        <h2>Laps</h2>
         <div class="laps" id="laps"></div>
       </div>
     </div>
@@ -216,10 +218,7 @@
     }
     if(!primary) primary = mine[0] || laps[0];
 
-    var combo = pretty(primary.rec.track) + (primary.rec.config? " ("+pretty(primary.rec.config)+")":"") + " — " + pretty(primary.rec.car);
-    document.getElementById("title").textContent = combo;
-    document.getElementById("subtitle").textContent = "Primary: " + primary.rec.user + "  ·  " + fmtTime(primary.rec.time_ms);
-    document.title = "Telemetry · " + primary.rec.user + " · " + combo;
+    applyTitles();
 
     buildTraceCanvases();
     renderLapList();
@@ -255,11 +254,49 @@
       });
       var nm=document.createElement("span"); nm.className="nm";
       nm.textContent=(l.trophy? l.trophy+" ":"")+l.rec.user;
+      var pr=document.createElement("input"); pr.type="radio"; pr.name="primlap";
+      pr.className="prim"; pr.title="Primary lap"; pr.checked=(l===primary);
+      pr.addEventListener("click", function(ev){ ev.stopPropagation(); });
+      pr.addEventListener("change", function(){ setPrimary(l); });
       var tm=document.createElement("span"); tm.className="tm"; tm.textContent=fmtTime(l.rec.time_ms);
-      row.appendChild(cb); row.appendChild(sw); row.appendChild(nm); row.appendChild(tm);
+      row.appendChild(cb); row.appendChild(sw); row.appendChild(nm); row.appendChild(pr); row.appendChild(tm);
       l._sw = sw; l._cb = cb;
       box.appendChild(row);
     });
+  }
+
+  function applyTitles(){
+    var combo = pretty(primary.rec.track) + (primary.rec.config? " ("+pretty(primary.rec.config)+")":"") + " — " + pretty(primary.rec.car);
+    document.getElementById("title").textContent = combo;
+    document.getElementById("subtitle").textContent =
+      "Primary lap: " + primary.rec.user + "  ·  " + fmtTime(primary.rec.time_ms);
+    document.title = "Telemetry · " + primary.rec.user + " · " + combo;
+  }
+
+  function setPrimary(l){
+    if(l===primary) return;
+    primary = l;
+    secSig = "";
+    applyTitles();
+    if(!l.shown){ toggleLap(l, true); }
+    // sector focus derives from the PRIMARY lap's splits: re-derive or reset
+    if(focus){
+      var b = sectorBounds();
+      if(b && b[focus.i]){
+        focus = {i:focus.i, d0:b[focus.i][0], d1:b[focus.i][1]};
+        startDomAnim(); mapFitPending = true;
+      } else {
+        focusAll();
+      }
+    }
+    renderLapList();
+    try {
+      var u = new URL(location.href);
+      u.searchParams.set("d", l.rec.user);
+      u.searchParams.set("ms", l.rec.time_ms);
+      history.replaceState(null, "", u);
+    } catch(err) {}
+    scheduleRender();
   }
 
   function toggleLap(l, on){
@@ -822,23 +859,25 @@
     fillSecBar(bar, ps);
     body.appendChild(bar);
     fillSecBar(mapbar, ps);
-    // sector times: primary plain, other shown laps colored vs primary
+    // sector times stay white; the gap vs the primary sits to the LEFT of
+    // each time, small and red/green. Total lap time closes the row.
     var html="<thead><tr><th>Lap</th>";
     ps.forEach(function(_, i){ html+="<th>S"+(i+1)+"</th>"; });
-    html+="</tr></thead><tbody>";
+    html+="<th>Time</th></tr></thead><tbody>";
     function rowFor(l, sp){
       var r="<tr><td><span class='swatch' style='display:inline-block;background:"+l.color+
         "'></span> "+(l.trophy? l.trophy+" ":"")+esc(l.rec.user)+"</td>";
       for(var i=0;i<ps.length;i++){
         if(i>=sp.length){ r+="<td></td>"; continue; }
-        var col="", gap="";
+        var gap="";
         if(l!==primary){
-          if(sp[i]<ps[i]) col="color:var(--accent)"; else if(sp[i]>ps[i]) col="color:var(--danger)";
+          var gcol = sp[i]<ps[i] ? "var(--accent)" : (sp[i]>ps[i] ? "var(--danger)" : "var(--muted)");
           var gv=(sp[i]-ps[i])/1000;
-          gap=" <span style='font-size:10px;opacity:.7'>("+(gv>=0?"+":"")+gv.toFixed(3)+")</span>";
+          gap="<span style='font-size:10px;color:"+gcol+"'>("+(gv>=0?"+":"")+gv.toFixed(3)+")</span> ";
         }
-        r+="<td style='"+col+"'>"+fmtSec(sp[i])+gap+"</td>";
+        r+="<td>"+gap+fmtSec(sp[i])+"</td>";
       }
+      r+="<td>"+fmtTime(l.rec.time_ms)+"</td>";
       return r+"</tr>";
     }
     html+=rowFor(primary, ps);
