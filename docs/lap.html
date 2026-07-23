@@ -96,6 +96,10 @@
     font-family:"Titillium Web",-apple-system,sans-serif; color:var(--muted); }
   .setuptable thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
+  .setuptable button.dlbtn { background:var(--panel2); color:var(--text);
+    border:1px solid var(--line); padding:2px 8px; font:600 10px "Chakra Petch",sans-serif;
+    text-transform:uppercase; letter-spacing:.5px; cursor:pointer; }
+  .setuptable button.dlbtn:hover { border-color:var(--accent); color:var(--accent); }
   .setupdl { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
   .setupdl button { background:var(--panel2); color:var(--text); border:1px solid var(--line);
     padding:3px 10px; font:600 11px "Chakra Petch",sans-serif; text-transform:uppercase;
@@ -172,7 +176,7 @@
 
   // Extra computed trace: time gap to the primary lap along the lap.
   // Not part of CH (the At-cursor table builds from CH with fixed columns).
-  var DELTA_CH = {key:"delta", label:"Gap to primary", unit:"s", lo:"sym", hi:"sym", computed:true};
+  var DELTA_CH = {key:"delta", label:"Delta", unit:"s", lo:"sym", hi:"sym", computed:true};
 
   var qs = new URLSearchParams(location.search);
   var want = {
@@ -893,18 +897,8 @@
     if(!withSetup.length){ card.style.display="none"; return; }
     card.style.display="";
     body.innerHTML="";
-    // downloads
-    var DLICON="<svg width='11' height='11' viewBox='0 0 24 24' style='vertical-align:-1px;margin-right:6px'>"+
+    var DLICON="<svg width='10' height='10' viewBox='0 0 24 24' style='vertical-align:-1px;margin-right:5px'>"+
       "<path d='M12 3v11m0 0l-4.5-4.5M12 14l4.5-4.5M4 20h16' stroke='currentColor' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>";
-    var bar=document.createElement("div"); bar.className="setupdl";
-    withSetup.forEach(function(l){
-      var b=document.createElement("button");
-      b.innerHTML=DLICON+esc((l.trophy? l.trophy+" ":"")+l.rec.user+" — "+l.data.setup.name);
-      b.title="Download this lap's setup";
-      b.addEventListener("click", function(){ dlBlob(l.data.setup.name, l.data.setup.ini); });
-      bar.appendChild(b);
-    });
-    body.appendChild(bar);
     // comparison table
     var parsed=withSetup.map(function(l){ return parseSetupIni(l.data.setup.ini); });
     var keys={};
@@ -926,8 +920,19 @@
       });
       html+="</tr>";
     });
+    // download row: one compact button under each lap's column
+    html+="<tr><td></td>";
+    withSetup.forEach(function(_, vi){
+      html+="<td><button class='dlbtn' data-i='"+vi+"' title='Download this lap&#39;s setup file'>"+
+        DLICON+"Setup</button></td>";
+    });
+    html+="</tr>";
     var tbl=document.createElement("table"); tbl.className="setuptable";
     tbl.innerHTML=html+"</tbody>";
+    Array.prototype.forEach.call(tbl.querySelectorAll("button.dlbtn"), function(b){
+      var l=withSetup[parseInt(b.getAttribute("data-i"), 10)];
+      b.addEventListener("click", function(){ dlBlob(l.data.setup.name, l.data.setup.ini); });
+    });
     body.appendChild(tbl);
   }
 
