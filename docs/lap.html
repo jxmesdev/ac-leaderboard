@@ -56,8 +56,7 @@
   input.swatch::-webkit-color-swatch { border:none; }
   input.swatch::-moz-color-swatch { border:none; }
   .lap .nm { font-weight:600; }
-  .lap input.prim { margin-left:auto; accent-color:var(--accent); cursor:pointer; }
-  .lap .tm { font-variant-numeric:tabular-nums;
+  .lap .tm { margin-left:auto; font-variant-numeric:tabular-nums;
     font-family:ui-monospace,Menlo,monospace; color:var(--muted); }
   .lap .dl { font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; font-size:12px; }
   .traces { margin-top:16px; }
@@ -82,7 +81,7 @@
     text-transform:uppercase; letter-spacing:.8px; cursor:pointer; }
   .secbtns button:hover { border-color:var(--muted); }
   .secbtns button.on { background:var(--accent); border-color:var(--accent); color:#0a0a0b; }
-  .sectable { border-collapse:collapse; font-size:12px; }
+  .sectable { border-collapse:collapse; font-size:12px; width:100%; }
   .sectable th, .sectable td { text-align:right; padding:3px 0 3px 38px;
     font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; }
   .sectable th:first-child, .sectable td:first-child { text-align:left; padding-left:0;
@@ -96,7 +95,6 @@
     font-family:"Titillium Web",-apple-system,sans-serif; color:var(--muted); }
   .setuptable thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
-  .setuptable td.diff { color:var(--accent); }
   .setupdl { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
   .setupdl button { background:var(--panel2); color:var(--text); border:1px solid var(--line);
     padding:3px 10px; font:600 11px "Chakra Petch",sans-serif; text-transform:uppercase;
@@ -106,7 +104,7 @@
     font-family:"Chakra Petch",sans-serif; text-transform:uppercase; letter-spacing:1.2px; }
   footer .fbrand { color:var(--accent); }
   .secmuted { color:var(--muted); font-size:12px; }
-  .readout .swatch, .sectable .swatch { vertical-align:middle; margin-top:-2px; }
+  .readout .swatch, .sectable .swatch, .setuptable .swatch { vertical-align:middle; margin-top:-2px; }
   .readout td:first-child, .sectable td:first-child { vertical-align:middle; }
 </style>
 </head>
@@ -142,7 +140,6 @@
     <div class="card sectors">
       <h2>At cursor <span id="cursorpos" style="text-transform:none;letter-spacing:0;color:var(--muted)"></span></h2>
       <div class="readout"><table id="readout"></table></div>
-      <div class="hint">Hover the traces or map to inspect. Δ = time gap to the primary lap at that point.</div>
     </div>
     <div class="card sectors" id="sectors" style="display:none">
       <h2>Sectors</h2>
@@ -171,6 +168,10 @@
     {key:"gear", label:"Gear",     unit:"",     lo:0, hi:"auto", step:true},
     {key:"str",  label:"Steering", unit:"°", lo:"sym", hi:"sym"}
   ];
+
+  // Extra computed trace: time gap to the primary lap along the lap.
+  // Not part of CH (the At-cursor table builds from CH with fixed columns).
+  var DELTA_CH = {key:"delta", label:"Gap to primary", unit:"s", lo:"sym", hi:"sym", computed:true};
 
   var qs = new URLSearchParams(location.search);
   var want = {
@@ -272,12 +273,8 @@
       });
       var nm=document.createElement("span"); nm.className="nm";
       nm.textContent=(l.trophy? l.trophy+" ":"")+l.rec.user;
-      var pr=document.createElement("input"); pr.type="radio"; pr.name="primlap";
-      pr.className="prim"; pr.title="Primary lap"; pr.checked=(l===primary);
-      pr.addEventListener("click", function(ev){ ev.stopPropagation(); });
-      pr.addEventListener("change", function(){ setPrimary(l); });
       var tm=document.createElement("span"); tm.className="tm"; tm.textContent=fmtTime(l.rec.time_ms);
-      row.appendChild(cb); row.appendChild(sw); row.appendChild(nm); row.appendChild(pr); row.appendChild(tm);
+      row.appendChild(cb); row.appendChild(sw); row.appendChild(nm); row.appendChild(tm);
       l._sw = sw; l._cb = cb;
       box.appendChild(row);
     });
@@ -294,6 +291,7 @@
   function setPrimary(l){
     if(l===primary) return;
     primary = l;
+    laps.forEach(function(x){ x._delta = null; x._deltaFor = null; });
     secSig = "";
     applyTitles();
     if(!l.shown){ toggleLap(l, true); }
@@ -341,7 +339,7 @@
   function buildTraceCanvases(){
     var host=document.getElementById("traces"); host.innerHTML="";
     var h=document.createElement("h2"); h.textContent="Traces"; host.appendChild(h);
-    CH.forEach(function(ch){
+    CH.concat([DELTA_CH]).forEach(function(ch){
       var wrap=document.createElement("div"); wrap.style.padding="0 8px 4px";
       var tt=document.createElement("div"); tt.className="tracetitle";
       tt.textContent=ch.label+(ch.unit?(" ("+ch.unit+")"):"");
@@ -396,8 +394,10 @@
 
   function chRange(ch, sl){
     if(ch.lo==="sym"||ch.hi==="sym"){
-      var m=1; sl.forEach(function(l){ l.data[ch.key].forEach(function(v){ m=Math.max(m,Math.abs(v)); }); });
-      m=Math.ceil(m/10)*10; return [-m,m];
+      var m=ch.computed?0.25:1;
+      sl.forEach(function(l){ var sr=seriesOf(l, ch); if(sr) sr.forEach(function(v){ m=Math.max(m,Math.abs(v)); }); });
+      m=ch.computed? Math.ceil(m*4)/4 : Math.ceil(m/10)*10;
+      return [-m,m];
     }
     var lo=(ch.lo==="auto")?Infinity:ch.lo, hi=(ch.hi==="auto")?-Infinity:ch.hi;
     if(ch.lo==="auto"||ch.hi==="auto"){
@@ -449,7 +449,8 @@
     ctx.save();
     ctx.beginPath(); ctx.rect(PADL, PADT, plotW, plotH); ctx.clip();
     sl.forEach(function(l){
-      var xs=l.data.nsp, ys=l.data[ch.key], n=xs.length;
+      var xs=l.data.nsp, ys=seriesOf(l, ch), n=xs.length;
+      if(!ys) return;
       ctx.strokeStyle=l.color; ctx.lineWidth=(l===primary?1.8:1.3); ctx.globalAlpha=0.95;
       ctx.beginPath();
       for(var i=0;i<n;i++){
@@ -464,14 +465,14 @@
       ctx.strokeStyle=textc; ctx.globalAlpha=0.5; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(cx,PADT); ctx.lineTo(cx,PADT+plotH); ctx.stroke(); ctx.globalAlpha=1;
       sl.forEach(function(l){
-        var s=sampleAt(l.data, cursor); if(!s) return;
-        ctx.fillStyle=l.color; ctx.beginPath(); ctx.arc(cx,yOf(s[ch.key]),2.6,0,7); ctx.fill();
+        var v=valueAt(l, ch, cursor); if(v==null) return;
+        ctx.fillStyle=l.color; ctx.beginPath(); ctx.arc(cx,yOf(v),2.6,0,7); ctx.fill();
       });
       // value box on THIS trace (every trace gets one, not just the hovered)
       var rows=[];
       sl.forEach(function(l){
-        var s=sampleAt(l.data, cursor); if(!s) return;
-        rows.push({color:l.color, txt:fmtVal(ch, s[ch.key])});
+        var v=valueAt(l, ch, cursor); if(v==null) return;
+        rows.push({color:l.color, txt:fmtVal(ch, v)});
       });
       if(rows.length){
         ctx.font="11px ui-monospace,Menlo,monospace";
@@ -783,7 +784,7 @@
     var cols = CH.map(function(c){ return c.label.slice(0,4); });
     var html = "<thead><tr><th>Lap</th>";
     CH.forEach(function(c){ html+="<th>"+c.label.slice(0,3)+"</th>"; });
-    html += "<th>Δ</th></tr></thead><tbody>";
+    html += "<th>Gap</th></tr></thead><tbody>";
     var p = primary && primary.shown && primary.data ? sampleAt(primary.data, cursor) : null;
     sl.forEach(function(l){
       var s=sampleAt(l.data, cursor); if(!s) return;
@@ -882,46 +883,6 @@
     setTimeout(function(){ URL.revokeObjectURL(a.href); }, 5000);
   }
 
-  // File System Access: pick Documents/Assetto Corsa/setups ONCE, then one
-  // click writes straight into <car>/<track folder>/. Chromium only.
-  function idb(){ return new Promise(function(res, rej){
-    var r=indexedDB.open("acl", 1);
-    r.onupgradeneeded=function(){ r.result.createObjectStore("kv"); };
-    r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); };
-  }); }
-  function idbGet(k){ return idb().then(function(db){ return new Promise(function(res){
-    var t=db.transaction("kv").objectStore("kv").get(k);
-    t.onsuccess=function(){ res(t.result); }; t.onerror=function(){ res(null); };
-  }); }); }
-  function idbSet(k, v){ return idb().then(function(db){ return new Promise(function(res){
-    var t=db.transaction("kv", "readwrite").objectStore("kv").put(v, k);
-    t.onsuccess=function(){ res(); }; t.onerror=function(){ res(); };
-  }); }); }
-
-  function saveToSetupsFolder(l){
-    var su=l.data.setup;
-    idbGet("setupsdir").then(function(dir){
-      var p = dir ? Promise.resolve(dir) : window.showDirectoryPicker({id:"acsetups"})
-        .then(function(d){ return idbSet("setupsdir", d).then(function(){ return d; }); });
-      return p;
-    }).then(function(dir){
-      return dir.requestPermission({mode:"readwrite"}).then(function(perm){
-        if(perm!=="granted") throw new Error("permission denied");
-        return dir.getDirectoryHandle(l.data.car, {create:true});
-      }).then(function(carDir){
-        return carDir.getDirectoryHandle(su.folder || l.data.track, {create:true});
-      }).then(function(trDir){
-        return trDir.getFileHandle(su.name, {create:true});
-      }).then(function(fh){ return fh.createWritable(); })
-      .then(function(w){ return w.write(su.ini).then(function(){ return w.close(); }); })
-      .then(function(){ alert("Saved to setups/"+l.data.car+"/"+(su.folder||l.data.track)+"/"+su.name); });
-    }).catch(function(err){
-      if(err && err.name==="AbortError") return;
-      alert("Could not save to the setups folder ("+err+") — using a normal download instead.");
-      dlBlob(su.name, su.ini);
-    });
-  }
-
   var setupSig="";
   function renderSetups(sl){
     var card=document.getElementById("setups"), body=document.getElementById("setupbody");
@@ -933,23 +894,16 @@
     card.style.display="";
     body.innerHTML="";
     // downloads
+    var DLICON="<svg width='11' height='11' viewBox='0 0 24 24' style='vertical-align:-1px;margin-right:6px'>"+
+      "<path d='M12 3v11m0 0l-4.5-4.5M12 14l4.5-4.5M4 20h16' stroke='currentColor' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>";
     var bar=document.createElement("div"); bar.className="setupdl";
     withSetup.forEach(function(l){
       var b=document.createElement("button");
-      b.textContent="⭳ "+(l.trophy? l.trophy+" ":"")+l.rec.user+" — "+l.data.setup.name;
+      b.innerHTML=DLICON+esc((l.trophy? l.trophy+" ":"")+l.rec.user+" — "+l.data.setup.name);
       b.title="Download this lap's setup";
       b.addEventListener("click", function(){ dlBlob(l.data.setup.name, l.data.setup.ini); });
       bar.appendChild(b);
     });
-    if(window.showDirectoryPicker){
-      withSetup.forEach(function(l){
-        var b=document.createElement("button");
-        b.textContent="→ AC folder: "+l.data.setup.name;
-        b.title="Write straight into your Assetto Corsa setups folder (pick it once)";
-        b.addEventListener("click", function(){ saveToSetupsFolder(l); });
-        bar.appendChild(b);
-      });
-    }
     body.appendChild(bar);
     // comparison table
     var parsed=withSetup.map(function(l){ return parseSetupIni(l.data.setup.ini); });
@@ -964,10 +918,9 @@
     html+="</tr></thead><tbody>";
     klist.forEach(function(k){
       var vals=parsed.map(function(p){ return p[k]; });
-      var differ=vals.some(function(v){ return v!==vals[0]; });
       html+="<tr><td>"+esc(k)+"</td>";
       vals.forEach(function(v){
-        html+="<td class='"+(differ?"diff":"")+"'>"+(v==null?"—":esc(v))+"</td>";
+        html+="<td>"+(v==null?"—":esc(v))+"</td>";
       });
       html+="</tr>";
     });
@@ -1040,6 +993,36 @@
     body.appendChild(tbl);
   }
 
+  function deltaSeries(l){
+    if(!(primary && primary.data && l.data)) return null;
+    var key = primary.rec.telemetry;
+    if(l._deltaFor === key && l._delta) return l._delta;
+    var n = l.data.nsp.length, arr = new Array(n);
+    if(l === primary){
+      for(var i = 0; i < n; i++) arr[i] = 0;
+    } else {
+      for(var j = 0; j < n; j++){
+        var ps = sampleAt(primary.data, l.data.nsp[j]);
+        arr[j] = ps ? (l.data.t[j] - ps.t) / 1000 : 0;
+      }
+    }
+    l._deltaFor = key; l._delta = arr;
+    return arr;
+  }
+  function seriesOf(l, ch){ return ch.computed ? deltaSeries(l) : l.data[ch.key]; }
+  // channel value at cursor position p for lap l (interpolated)
+  function valueAt(l, ch, p){
+    if(!ch.computed){ var sm = sampleAt(l.data, p); return sm ? sm[ch.key] : null; }
+    var arr = deltaSeries(l); if(!arr) return null;
+    var ns = l.data.nsp, n = ns.length;
+    var lo = 0, hi = n - 1;
+    if(p <= ns[0]) return arr[0];
+    if(p >= ns[n-1]) return arr[n-1];
+    while(hi - lo > 1){ var mid = (lo + hi) >> 1; if(ns[mid] <= p) lo = mid; else hi = mid; }
+    var f = (p - ns[lo]) / Math.max(1e-9, ns[hi] - ns[lo]);
+    return arr[lo] + (arr[hi] - arr[lo]) * f;
+  }
+
   // interpolate all channels of a lap at normalized position p (0..1)
   function sampleAt(d, p){
     var ns=d.nsp, n=ns.length; if(!n) return null;
@@ -1056,6 +1039,7 @@
 
   // ---- hover ----------------------------------------------------------
   function fmtVal(ch, v){
+    if(ch.key==="delta") return (v>=0?"+":"")+v.toFixed(2)+" s";
     if(ch.key==="spd") return Math.round(v)+" km/h";
     if(ch.key==="gear") return String(Math.round(v));
     if(ch.key==="str") return v.toFixed(0)+"°";
