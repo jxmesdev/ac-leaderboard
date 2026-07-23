@@ -88,13 +88,15 @@
   .tracetitle { font:600 11px "Chakra Petch",sans-serif; text-transform:uppercase;
     letter-spacing:1px; color:var(--muted); padding:10px 8px 2px 46px; }
   .empty { padding:40px; text-align:center; color:var(--muted); }
-  .card > h2.tgl { cursor:pointer; user-select:none; }
-  .card > h2.tgl::after { content:""; float:right; width:7px; height:7px;
-    border-right:1.6px solid var(--muted); border-bottom:1.6px solid var(--muted);
-    margin-top:3px; transition:transform .15s;
-    transform:scaleY(-1) rotate(45deg); }   /* two-line chevron, pointing up */
+  .card > h2.tgl { cursor:pointer; user-select:none; position:relative; }
+  .card > h2.tgl::after { content:""; position:absolute; right:14px; top:50%;
+    width:5px; height:5px;
+    border-right:1.5px solid var(--muted); border-bottom:1.5px solid var(--muted);
+    transition:transform .15s;
+    transform:translateY(-50%) scaleY(-1) rotate(45deg); }  /* chevron up */
   .card.collapsed > h2.tgl { border-bottom:none; }
-  .card.collapsed > h2.tgl::after { transform:scaleY(1) rotate(45deg); }  /* down */
+  .card.collapsed > h2.tgl::after {
+    transform:translateY(-50%) scaleY(1) rotate(45deg); }   /* chevron down */
   .card.collapsed > *:not(h2) { display:none !important; }
   .sectors { margin-top:16px; }
   .secbody { padding:10px 14px 12px; }
