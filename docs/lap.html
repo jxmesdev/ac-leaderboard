@@ -876,7 +876,7 @@
     var p = primary && primary.shown && primary.data ? sampleAt(primary.data, cursor) : null;
     sl.forEach(function(l){
       var s=sampleAt(l.data, cursor); if(!s) return;
-      html += "<tr><td><span class='swatch' style='display:inline-block;background:"+l.color+"'></span> "+esc(l.rec.user)+"</td>";
+      html += "<tr><td><span class='swatch' style='display:inline-block;background:"+l.color+"'></span> "+(l.trophy? l.trophy+" ":"")+esc(l.rec.user)+"</td>";
       html += "<td>"+Math.round(s.thr)+"</td><td>"+Math.round(s.brk)+"</td><td>"+Math.round(s.spd)+"</td>";
       html += "<td>"+Math.round(s.gear)+"</td><td>"+s.str.toFixed(0)+"</td>";
       var dl="";
