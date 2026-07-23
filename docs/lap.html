@@ -232,7 +232,7 @@
 
     laps = roster.map(function(r,i){
       var c = PALETTE[i%PALETTE.length];
-      try { c = localStorage.getItem("aclc:"+r.telemetry) || c; } catch(err) {}
+      try { c = localStorage.getItem("aclc2:"+r.telemetry) || c; } catch(err) {}
       return {rec:r, color:c, shown:false, data:null, loading:false};
     });
     // trophies: within the combo, each driver's own laps ranked by time
@@ -281,7 +281,7 @@
       sw.addEventListener("click", function(ev){ ev.stopPropagation(); });
       sw.addEventListener("input", function(){
         l.color=sw.value;
-        try { localStorage.setItem("aclc:"+l.rec.telemetry, l.color); } catch(err) {}
+        try { localStorage.setItem("aclc2:"+l.rec.telemetry, l.color); } catch(err) {}
         scheduleRender();
       });
       var nm=document.createElement("span"); nm.className="nm";
