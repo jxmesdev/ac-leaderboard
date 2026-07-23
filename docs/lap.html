@@ -275,8 +275,12 @@
             slugjs(primary.rec.config)+"__sections.json")
       .then(function(sc){ globalSections=sc.sections||null; scheduleRender(); })
       .catch(function(){});
-    // show primary by default
+    // show primary by default, plus any laps named in ?show=
     toggleLap(primary, true);
+    var showIds = (qs.get("show")||"").split(",").filter(Boolean);
+    laps.forEach(function(l){
+      if(l!==primary && showIds.indexOf(lapId(l)) >= 0) toggleLap(l, true);
+    });
   }).catch(function(e){ fail("Could not load leaderboard data. " + e.message); });
 
   // ---- lap selection --------------------------------------------------
@@ -387,8 +391,19 @@
     scheduleRender();
   }
 
+  function lapId(l){ return slugjs(l.rec.user) + "~" + l.rec.time_ms; }
+  function syncShowParam(){
+    try {
+      var ids = laps.filter(function(x){ return x.shown; }).map(lapId).join(",");
+      var u = new URL(location.href);
+      if(ids) u.searchParams.set("show", ids); else u.searchParams.delete("show");
+      history.replaceState(null, "", u);
+    } catch(err) {}
+  }
+
   function toggleLap(l, on){
     l.shown = on;
+    syncShowParam();
     if(on && !l.data && !l.loading){
       l.loading = true;
       getJSON("data/"+l.rec.telemetry).then(function(d){
