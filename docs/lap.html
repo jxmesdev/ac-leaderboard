@@ -297,9 +297,12 @@
     var combo = pretty(primary.rec.track) + (primary.rec.config? " ("+pretty(primary.rec.config)+")":"") + " — " + pretty(primary.rec.car);
     document.getElementById("title").textContent = combo;
     document.getElementById("subtitle").innerHTML =
-      "<b style='color:var(--text)'>Primary Lap:</b> " +
-      (primary.trophy ? primary.trophy + " " : "") +
-      esc(primary.rec.user) + "  &middot;  " + fmtTime(primary.rec.time_ms);
+      "<b style='color:var(--text)'>Primary Lap:</b>" +
+      "<span style='margin-left:10px'>" +
+      (primary.trophy ? primary.trophy + "<span style='margin-left:8px'></span>" : "") +
+      esc(primary.rec.user) + "</span>" +
+      "<span style='margin:0 10px;color:var(--line)'>&middot;</span>" +
+      fmtTime(primary.rec.time_ms);
     document.title = "Telemetry · " + primary.rec.user + " · " + combo;
   }
 
