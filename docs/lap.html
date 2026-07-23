@@ -76,6 +76,7 @@
   .sectors { margin-top:16px; }
   .secbody { padding:10px 14px 12px; }
   .secbtns { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  #tracesec { margin:10px 8px 0 46px; }
   .secbtns button { background:var(--panel2); color:var(--text); border:1px solid var(--line);
     border-radius:6px; padding:3px 12px; font:600 11px "Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; cursor:pointer; }
@@ -96,6 +97,7 @@
     font-family:"Titillium Web",-apple-system,sans-serif; color:var(--muted); }
   .setuptable thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
+  .setuptable tbody tr:hover td { background:var(--panel2); }
   .setuptable button.dlbtn { background:var(--panel2); color:var(--text);
     border:1px solid var(--line); padding:2px 8px; font:600 10px "Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.5px; cursor:pointer; }
@@ -344,6 +346,8 @@
   function buildTraceCanvases(){
     var host=document.getElementById("traces"); host.innerHTML="";
     var h=document.createElement("h2"); h.textContent="Traces"; host.appendChild(h);
+    var tsec=document.createElement("div"); tsec.className="secbtns"; tsec.id="tracesec";
+    host.appendChild(tsec);
     CH.concat([DELTA_CH]).forEach(function(ch){
       var wrap=document.createElement("div"); wrap.style.padding="0 8px 4px";
       var tt=document.createElement("div"); tt.className="tracetitle";
@@ -939,7 +943,9 @@
   function renderSectors(sl){
     var card=document.getElementById("sectors"), body=document.getElementById("secbody");
     var mapbar=document.getElementById("mapsec");
-    if(!(primary && primary.data)){ card.style.display="none"; mapbar.innerHTML=""; secSig=""; return; }
+    var tracebar=document.getElementById("tracesec");
+    if(!(primary && primary.data)){ card.style.display="none"; mapbar.innerHTML="";
+      if(tracebar) tracebar.innerHTML=""; secSig=""; return; }
     var ps=splitsOf(primary);
     var sig=(ps?ps.join(","):"none")+"|"+(focus?focus.i:-1)+"|"+(camCustom?"c":"")+"|"+
       sl.map(function(l){ return l.rec.telemetry; }).join(";");
@@ -949,6 +955,7 @@
     body.innerHTML="";
     if(!ps){
       mapbar.innerHTML="";
+      if(tracebar) tracebar.innerHTML="";
       var mu=document.createElement("div"); mu.className="secmuted";
       mu.textContent="No sector data — lap predates sector recording.";
       body.appendChild(mu);
@@ -958,6 +965,7 @@
     fillSecBar(bar, ps);
     body.appendChild(bar);
     fillSecBar(mapbar, ps);
+    if(tracebar) fillSecBar(tracebar, ps);
     // sector times stay white; the gap vs the primary sits to the LEFT of
     // each time, small and red/green. Total lap time closes the row.
     var html="<thead><tr><th>Lap</th>";
