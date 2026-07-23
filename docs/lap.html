@@ -851,10 +851,9 @@
         }
         return [X[bi2], Z[bi2]];
       }
-      ctx.lineWidth=3;
+      ctx.lineWidth=4;
       ctx.strokeStyle=css("--accent");
       for(var bi=0; bi<sb.length; bi++){
-        if(bi===0 && e) continue;      // edges mode already draws start/finish
         var pb=sb[bi][0];
         var sC=sampleAt(primary.data, pb);
         if(!sC) continue;
@@ -865,7 +864,7 @@
           var R=nearestOn(e.rx, e.rz, sC.x, sC.z);
           var dx3=R[0]-L[0], dz3=R[1]-L[1], dl3=Math.sqrt(dx3*dx3+dz3*dz3);
           if(dl3<1e-6) continue;
-          var ux3=dx3/dl3, uz3=dz3/dl3, ov=2.5;
+          var ux3=dx3/dl3, uz3=dz3/dl3, ov=4;
           wA=[L[0]-ux3*ov, L[1]-uz3*ov]; wB=[R[0]+ux3*ov, R[1]+uz3*ov];
         } else {
           // no edges: perpendicular to the lap direction, +-11m
@@ -875,7 +874,7 @@
           var tbx=sB.x-sA.x, tbz=sB.z-sA.z, tbl=Math.sqrt(tbx*tbx+tbz*tbz);
           if(tbl<1e-6) continue;
           var nbx=-tbz/tbl, nbz=tbx/tbl;
-          wA=[sC.x+nbx*11, sC.z+nbz*11]; wB=[sC.x-nbx*11, sC.z-nbz*11];
+          wA=[sC.x+nbx*13, sC.z+nbz*13]; wB=[sC.x-nbx*13, sC.z-nbz*13];
         }
         var mA=P(wA[0], wA[1]), mB=P(wB[0], wB[1]);
         ctx.globalAlpha=0.9;
