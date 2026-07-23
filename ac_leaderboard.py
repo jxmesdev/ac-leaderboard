@@ -36,7 +36,7 @@ APP_NAME = "AC Leaderboard"
 #   3 = + Config/Store/LapRecorder objects (reads config.json + users.json)
 #   4 = full app (everything except git, which stays off)
 # =============================================================================
-DIAG_LEVEL = int(os.environ.get("ACL_DIAG_LEVEL", "0"))
+DIAG_LEVEL = int(os.environ.get("ACL_DIAG_LEVEL", "4"))
 
 # Levels 0-3 imply: inert update loop, no git. These stay off until the crash
 # is found (both already individually ruled out as causes, but kept off so each
