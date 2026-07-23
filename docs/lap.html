@@ -296,9 +296,10 @@
   function applyTitles(){
     var combo = pretty(primary.rec.track) + (primary.rec.config? " ("+pretty(primary.rec.config)+")":"") + " — " + pretty(primary.rec.car);
     document.getElementById("title").textContent = combo;
-    document.getElementById("subtitle").textContent =
-      "Primary lap: " + (primary.trophy ? primary.trophy + " " : "") +
-      primary.rec.user + "  ·  " + fmtTime(primary.rec.time_ms);
+    document.getElementById("subtitle").innerHTML =
+      "<b style='color:var(--text)'>Primary Lap:</b> " +
+      (primary.trophy ? primary.trophy + " " : "") +
+      esc(primary.rec.user) + "  &middot;  " + fmtTime(primary.rec.time_ms);
     document.title = "Telemetry · " + primary.rec.user + " · " + combo;
   }
 
