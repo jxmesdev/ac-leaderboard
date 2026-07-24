@@ -114,14 +114,14 @@
   {
     "car": "ks_nissan_370z", 
     "config": "club_circuit", 
-    "date": "2026-07-24T00:52:32Z", 
+    "date": "2026-07-24T00:54:53Z", 
     "source": "auto", 
     "splits": [
-      28508, 
-      33994
+      25130, 
+      34093
     ], 
-    "telemetry": "telemetry/ks_vallelunga__club_circuit__ks_nissan_370z__james__62502.json", 
-    "time_ms": 62502, 
+    "telemetry": "telemetry/ks_vallelunga__club_circuit__ks_nissan_370z__james__59223.json", 
+    "time_ms": 59223, 
     "track": "ks_vallelunga", 
     "user": "James"
   }
