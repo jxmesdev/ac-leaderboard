@@ -19,6 +19,20 @@ import mock_ac
 ac = mock_ac.install()          # registers fake `ac` + `acsys`
 
 repo = sys.argv[1]
+
+# Fake AC install so the track-asset path (map.png grab -> outbox asset)
+# actually runs -- a real rig crashed here while the mock env silently
+# skipped it (grab returns None without an install).
+fake_ac = os.path.join(repo, "_fake_ac")
+_track = os.path.join(fake_ac, "content", "tracks", "spa")
+if not os.path.isdir(os.path.join(_track, "data")):
+    os.makedirs(os.path.join(_track, "data"))
+with open(os.path.join(_track, "map.png"), "wb") as f:
+    f.write(b"\x89PNG-fake-map-bytes")
+with open(os.path.join(_track, "data", "map.ini"), "w") as f:
+    f.write("[PARAMETERS]\nSCALE_FACTOR=1\nX_OFFSET=10\nZ_OFFSET=20\n"
+            "WIDTH=100\nHEIGHT=80\n")
+
 cfg_path = os.path.join(repo, "_smoke_config.json")
 with open(cfg_path, "w") as f:
     json.dump({
@@ -26,8 +40,8 @@ with open(cfg_path, "w") as f:
         "data_subdir": "docs/data",
         "git_branch": "main",
         "auto_push": True,
-        "auto_capture": True,
         "leaderboard_rows": 5,
+        "ac_root": fake_ac,
     }, f)
 os.environ["ACL_CONFIG"] = cfg_path
 
@@ -185,6 +199,12 @@ print("  samples:", tel["n"], "| channels:",
       "| len(m):", tel["track_len_m"], "| splits:", tel.get("splits"))
 # Splits round-trip into BOTH the record and the telemetry payload.
 assert tel.get("splits") == [27000, 27100, 27100], tel.get("splits")
+# The track map attached (payload dict) and its png synced as an asset.
+assert tel.get("trackmap") and tel["trackmap"]["url"] == "trackmaps/spa__.png", \
+    tel.get("trackmap")
+map_dst = os.path.join(repo, "docs", "data", "trackmaps", "spa__.png")
+assert os.path.isfile(map_dst), "map.png asset must reach docs/data"
+print("trackmap attached:", tel["trackmap"])
 
 
 def james_spa_records():

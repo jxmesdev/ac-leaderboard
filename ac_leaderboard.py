@@ -507,10 +507,22 @@ class LeaderboardApp(object):
                                               rec.get("date"), self.recorder.hz)
             if splits:
                 payload["splits"] = splits
+        except Exception:
+            log("telemetry build failed:\n" + traceback.format_exc())
+            return None
+        # Optional enrichments below are EACH best-effort: a failure in one
+        # must never cost the lap its traces (Daren's first laps lost all
+        # telemetry to a crash in the map-asset step alone).
+        try:
+            # grab() returns (info_dict, copied_path); the asset rel is the
+            # dict's url -- the dict itself goes into the payload
             tm = self._grab_trackmap(track, cfg)
             if tm is not None:
                 payload["trackmap"] = tm[0]
-                self.outbox.add_asset(tm[0], tm[1])
+                self.outbox.add_asset(tm[0]["url"], tm[1])
+        except Exception:
+            log("trackmap attach failed:\n" + traceback.format_exc())
+        try:
             # Reference the published edges file; only (re)build it if it is
             # missing or predates the current algorithm -- never on every PB.
             # A copy already queued in the outbox counts as published (the
@@ -524,6 +536,9 @@ class LeaderboardApp(object):
                 if eg is not None:
                     payload["edges_url"] = eg[0]
                     self.outbox.add_asset(eg[0], eg[1])
+        except Exception:
+            log("edges attach failed:\n" + traceback.format_exc())
+        try:
             su = self._grab_setup(car, track)
             if su is not None:
                 name = su.get("name") or \
@@ -533,8 +548,7 @@ class LeaderboardApp(object):
                                     "folder": su["folder"],
                                     "src": su.get("src") or "latest_saved"}
         except Exception:
-            log("telemetry build failed:\n" + traceback.format_exc())
-            return None
+            log("setup attach failed:\n" + traceback.format_exc())
         # `rec` is the dict the store keeps (upsert appends it as-is), so
         # linking here updates the stored record directly -- never a lookup,
         # which could hit one of the driver's OTHER laps now.
