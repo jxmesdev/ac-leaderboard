@@ -34,12 +34,6 @@
   .field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 240px; }
   label { font: 600 11px "Chakra Petch", sans-serif; text-transform: uppercase;
     letter-spacing: 1.4px; color: var(--muted); }
-  select {
-    appearance: none; background: var(--panel); color: var(--text);
-    border: 1px solid var(--line); border-radius: 0; padding: 10px 12px;
-    font: 15px "Titillium Web", sans-serif; cursor: pointer;
-  }
-  select:focus { outline: none; border-color: var(--accent); }
   .card {
     background: var(--panel); border: 1px solid var(--line); border-radius: 0;
     overflow: hidden;
@@ -100,8 +94,18 @@
     text-transform: none; letter-spacing: 0; color: var(--text);
   }
   .multipop label:hover { background: var(--panel2); }
-  .multipop label + label { border-top: 1px solid var(--line); }
+  .multipop > * + * { border-top: 1px solid var(--line); }
   .multipop input { accent-color: var(--accent); margin: 0; }
+  .multipop .row {
+    padding: 9px 12px; cursor: pointer;
+    font: 15px "Titillium Web", sans-serif; color: var(--text);
+  }
+  .multipop .row:hover { background: var(--panel2); }
+  .multipop .row.sel { color: var(--accent); }
+  .optlap { padding: 10px 18px; border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 12px; }
+  .optlap b { color: var(--accent); font-weight: 600;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; }
   @media (max-width: 760px) { .seccol { display: none; } }
   footer { margin-top: auto; padding-top: 64px; color: var(--muted); font-size: 11px; text-align: center;
     font-family: "Chakra Petch", sans-serif; text-transform: uppercase; letter-spacing: 1.2px; }
@@ -118,8 +122,11 @@
 
   <div class="controls">
     <div class="field">
-      <label for="combo">Track &amp; Car</label>
-      <select id="combo"><option value="">Select combination…</option></select>
+      <label for="combobtn">Track &amp; Car</label>
+      <div class="multi">
+        <button type="button" class="multibtn" id="combobtn">Select combination…</button>
+        <div class="multipop" id="combopop"></div>
+      </div>
     </div>
     <div class="field">
       <label for="userbtn">Filter driver</label>
@@ -149,6 +156,7 @@
 <script>
 (function () {
   var records = [], users = [];
+  var comboVal = "", comboOpts = [];   // selected track+car combo
   var driverNames = [];   // display names, sorted, unique per ukey
   var filterSel = {};     // ukey(name) -> true; empty = all drivers
   function filterActive() { return Object.keys(filterSel).length > 0; }
@@ -205,7 +213,7 @@
   }
 
   function render() {
-    var combo = document.getElementById("combo").value;
+    var combo = comboVal;
     var head = document.getElementById("head");
     var board = document.getElementById("board");
     var count = document.getElementById("count");
@@ -239,9 +247,10 @@
     rows.forEach(function (r) {
       if (r.splits && r.splits.length > nSec) nSec = Math.min(r.splits.length, 4);
     });
-    var html = '<table><thead><tr><th>#</th><th>Driver</th>';
+    var html = '<table><thead><tr><th>#</th><th>Driver</th>' +
+      '<th style="text-align:right">Time</th>';
     for (var si = 0; si < nSec; si++) html += '<th class="seccol" style="text-align:right">S' + (si + 1) + '</th>';
-    html += '<th style="text-align:right">Time</th><th style="text-align:right">Gap</th></tr></thead><tbody>';
+    html += '<th style="text-align:right">Gap</th></tr></thead><tbody>';
     rows.forEach(function (r, i) {
       var cls = i < 3 ? "p" + (i + 1) : "";
       var badge = r.source === "manual" ? '<span class="badge">manual</span>' : "";
@@ -249,7 +258,8 @@
       var trophy = (viewMode !== "best" && r._trophy) ? r._trophy + " " : "";
       html += '<tr class="' + cls + '" data-href="' + escapeHtml(lapHref(r)) + '">' +
         '<td class="rank">' + (i + 1) + '</td>' +
-        '<td class="user">' + trophy + escapeHtml(r.user) + badge + '</td>';
+        '<td class="user">' + trophy + escapeHtml(r.user) + badge + '</td>' +
+        '<td class="time">' + fmtTime(r.time_ms) + '</td>';
       for (var sj = 0; sj < nSec; sj++) {
         var has = r.splits && r.splits[sj] != null;
         var sv = has ? (r.splits[sj] / 1000).toFixed(3) : "—";
@@ -263,10 +273,32 @@
         }
         html += '<td class="gap seccol">' + sg + sv + '</td>';
       }
-      html += '<td class="time">' + fmtTime(r.time_ms) + '</td>' +
-        '<td class="gap">' + fmtGap(r.time_ms - lead.time_ms) + '</td></tr>';
+      html += '<td class="gap">' + fmtGap(r.time_ms - lead.time_ms) + '</td></tr>';
     });
     html += '</tbody></table>';
+    // Optimal lap: best of each sector across the FILTERED laps (pool, both
+    // view modes), summed. Hidden when any sector has no data at all.
+    var bests = [], nOpt = 0;
+    pool.forEach(function (r) {
+      if (r.splits && r.splits.length > nOpt) nOpt = Math.min(r.splits.length, 4);
+    });
+    for (var bi = 0; bi < nOpt; bi++) {
+      var b = null;
+      pool.forEach(function (r) {
+        var v = r.splits ? r.splits[bi] : null;
+        if (v != null && (b == null || v < b)) b = v;
+      });
+      bests.push(b);
+    }
+    if (nOpt && bests.indexOf(null) < 0) {
+      var tot = 0;
+      bests.forEach(function (v) { tot += v; });
+      var parts = bests.map(function (v, k) {
+        return 'S' + (k + 1) + ' ' + (v / 1000).toFixed(3);
+      });
+      html += '<div class="optlap">Optimal lap <b>' + fmtTime(tot) + '</b>' +
+        ' · ' + parts.join(' · ') + '</div>';
+    }
     board.innerHTML = html;
   }
 
@@ -286,17 +318,35 @@
   }
 
   function fillCombos() {
-    var seen = {}, opts = [];
+    var seen = {};
+    comboOpts = [];
     records.forEach(function (r) {
       var k = comboKey(r);
-      if (!seen[k]) { seen[k] = true; opts.push({ k: k, label: comboLabel(r) }); }
+      if (!seen[k]) { seen[k] = true; comboOpts.push({ k: k, label: comboLabel(r) }); }
     });
-    opts.sort(function (a, b) { return a.label.localeCompare(b.label); });
-    var sel = document.getElementById("combo");
-    opts.forEach(function (o) {
-      var el = document.createElement("option");
-      el.value = o.k; el.textContent = o.label; sel.appendChild(el);
+    comboOpts.sort(function (a, b) { return a.label.localeCompare(b.label); });
+    renderComboPop();
+  }
+
+  // Track & Car: same styled dropdown as Filter driver, single-select.
+  function renderComboPop() {
+    var pop = document.getElementById("combopop");
+    pop.innerHTML = "";
+    comboOpts.forEach(function (o) {
+      var row = document.createElement("div");
+      row.className = "row" + (o.k === comboVal ? " sel" : "");
+      row.textContent = o.label;
+      row.addEventListener("click", function () {
+        comboVal = o.k;
+        renderComboPop();
+        pop.classList.remove("open");
+        render();
+      });
+      pop.appendChild(row);
     });
+    document.getElementById("combobtn").textContent = comboVal
+      ? comboOpts.filter(function (o) { return o.k === comboVal; })[0].label
+      : "Select combination…";
   }
   function fillUsers() {
     // unique per ukey: "Test" from users.json and "test" from a record must
@@ -362,19 +412,26 @@
     render();
   }
 
-  document.getElementById("combo").addEventListener("change", render);
-  document.getElementById("userbtn").addEventListener("click", function (e) {
-    e.stopPropagation();
-    document.getElementById("userpop").classList.toggle("open");
-  });
+  function wirePop(btnId, popId, otherId) {
+    document.getElementById(btnId).addEventListener("click", function (e) {
+      e.stopPropagation();
+      document.getElementById(otherId).classList.remove("open");
+      document.getElementById(popId).classList.toggle("open");
+    });
+  }
+  wirePop("combobtn", "combopop", "userpop");
+  wirePop("userbtn", "userpop", "combopop");
   document.addEventListener("click", function (e) {
-    var pop = document.getElementById("userpop");
-    if (pop.classList.contains("open") && !pop.contains(e.target)) {
-      pop.classList.remove("open");
-    }
+    ["combopop", "userpop"].forEach(function (id) {
+      var pop = document.getElementById(id);
+      if (pop.classList.contains("open") && !pop.contains(e.target)) {
+        pop.classList.remove("open");
+      }
+    });
   });
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape") {
+      document.getElementById("combopop").classList.remove("open");
       document.getElementById("userpop").classList.remove("open");
     }
   });
@@ -395,9 +452,9 @@
   ]).then(function (res) {
     records = Array.isArray(res[0]) ? res[0] : [];
     users = Array.isArray(res[1]) ? res[1] : [];
-    fillCombos(); fillUsers(); render();
-    var first = document.getElementById("combo");
-    if (first.options.length === 2) { first.selectedIndex = 1; render(); }
+    fillCombos(); fillUsers();
+    if (comboOpts.length === 1) { comboVal = comboOpts[0].k; renderComboPop(); }
+    render();
   });
 })();
 </script>
