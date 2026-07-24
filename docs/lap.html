@@ -328,6 +328,11 @@
       primary = mine.filter(function(l){ return l.rec.time_ms===want.ms; })[0] || null;
     }
     if(!primary) primary = mine[0] || laps[0];
+    // remember this combo so "back to leaderboard" lands on it preselected
+    try {
+      localStorage.setItem("acl_last_combo",
+        [primary.rec.track, primary.rec.config || "", primary.rec.car].join("|"));
+    } catch(err) {}
     assignDefaultColors();
 
     applyTitles();

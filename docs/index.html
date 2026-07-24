@@ -338,6 +338,32 @@
     renderComboPop();
   }
 
+  function saveLastCombo(k) {
+    try { localStorage.setItem("acl_last_combo", k); } catch (e) { /* ignore */ }
+  }
+
+  // Initial combo: explicit ?t=&c=&car= link wins, then the last combo
+  // viewed anywhere on the site (the lap page records it too), then
+  // auto-select when only one combo exists.
+  function resolveInitialCombo() {
+    var cand = [];
+    var q = new URLSearchParams(location.search);
+    if (q.get("t")) {
+      cand.push([q.get("t"), q.get("c") || "", q.get("car") || ""].join("|"));
+    }
+    try {
+      var saved = localStorage.getItem("acl_last_combo");
+      if (saved) cand.push(saved);
+    } catch (e) { /* ignore */ }
+    for (var i = 0; i < cand.length; i++) {
+      var want = cand[i].toLowerCase();
+      for (var j = 0; j < comboOpts.length; j++) {
+        if (comboOpts[j].k.toLowerCase() === want) return comboOpts[j].k;
+      }
+    }
+    return comboOpts.length === 1 ? comboOpts[0].k : "";
+  }
+
   // Track & Car: same styled dropdown as Filter driver, single-select.
   function renderComboPop() {
     var pop = document.getElementById("combopop");
@@ -348,6 +374,7 @@
       row.textContent = o.label;
       row.addEventListener("click", function () {
         comboVal = o.k;
+        saveLastCombo(o.k);
         renderComboPop();
         pop.classList.remove("open");
         render();
@@ -463,7 +490,8 @@
     records = Array.isArray(res[0]) ? res[0] : [];
     users = Array.isArray(res[1]) ? res[1] : [];
     fillCombos(); fillUsers();
-    if (comboOpts.length === 1) { comboVal = comboOpts[0].k; renderComboPop(); }
+    comboVal = resolveInitialCombo();
+    if (comboVal) renderComboPop();
     render();
   });
 })();
