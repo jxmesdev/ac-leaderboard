@@ -138,5 +138,19 @@
     "time_ms": 104356, 
     "track": "ks_brands_hatch", 
     "user": "Daren"
+  }, 
+  {
+    "car": "ks_mazda_mx5_cup", 
+    "config": "indy", 
+    "date": "2026-07-24T17:41:58Z", 
+    "source": "auto", 
+    "splits": [
+      35866, 
+      24854
+    ], 
+    "telemetry": "telemetry/ks_brands_hatch__indy__ks_mazda_mx5_cup__daren__60720.json", 
+    "time_ms": 60720, 
+    "track": "ks_brands_hatch", 
+    "user": "Daren"
   }
 ]
