@@ -196,9 +196,9 @@
     all.forEach(function (r) {
       if (r.splits && r.splits.length > nSec) nSec = Math.min(r.splits.length, 4);
     });
-    var html = '<table><thead><tr><th>#</th><th>Driver</th><th style="text-align:right">Time</th>';
+    var html = '<table><thead><tr><th>#</th><th>Driver</th>';
     for (var si = 0; si < nSec; si++) html += '<th class="seccol" style="text-align:right">S' + (si + 1) + '</th>';
-    html += '<th style="text-align:right">Gap</th></tr></thead><tbody>';
+    html += '<th style="text-align:right">Time</th><th style="text-align:right">Gap</th></tr></thead><tbody>';
     rows.forEach(function (r, i) {
       var cls = i < 3 ? "p" + (i + 1) : "";
       if (highlight && (r.user || "").toLowerCase() === highlight) cls += " hl";
@@ -206,13 +206,13 @@
       var trophy = r._trophy ? r._trophy + " " : "";
       html += '<tr class="' + cls + '" data-href="' + escapeHtml(lapHref(r)) + '">' +
         '<td class="rank">' + (i + 1) + '</td>' +
-        '<td class="user">' + trophy + escapeHtml(r.user) + badge + '</td>' +
-        '<td class="time">' + fmtTime(r.time_ms) + '</td>';
+        '<td class="user">' + trophy + escapeHtml(r.user) + badge + '</td>';
       for (var sj = 0; sj < nSec; sj++) {
         var sv = r.splits && r.splits[sj] != null ? (r.splits[sj] / 1000).toFixed(3) : "—";
         html += '<td class="gap seccol">' + sv + '</td>';
       }
-      html += '<td class="gap">' + fmtGap(r.time_ms - leader) + '</td></tr>';
+      html += '<td class="time">' + fmtTime(r.time_ms) + '</td>' +
+        '<td class="gap">' + fmtGap(r.time_ms - leader) + '</td></tr>';
     });
     html += '</tbody></table>';
     board.innerHTML = html;
