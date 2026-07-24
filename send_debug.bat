@@ -9,6 +9,12 @@ type debug.log >> %REPORT% 2>nul
 echo. >> %REPORT%
 echo === current_setup.ini (live capture) ============== >> %REPORT%
 type current_setup.ini >> %REPORT% 2>nul
+echo. >> %REPORT%
+echo === git status (app folder) ======================= >> %REPORT%
+git status --porcelain >> %REPORT% 2>nul
+echo. >> %REPORT%
+echo === AC log.txt tail (python import errors land here) >> %REPORT%
+powershell -NoProfile -Command "Get-Content -Tail 300 \"$env:USERPROFILE\Documents\Assetto Corsa\logs\log.txt\"" >> %REPORT% 2>nul
 git add %REPORT%
 git commit -m "debug report from %COMPUTERNAME%"
 git pull --rebase
