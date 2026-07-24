@@ -106,6 +106,7 @@
     color: var(--muted); font-size: 12px; }
   .optlap b { color: var(--accent); font-weight: 600; margin-left: 8px;
     font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .optlap .optsep { margin: 0 8px; }
   @media (max-width: 760px) { .seccol { display: none; } }
   footer { margin-top: auto; padding-top: 64px; color: var(--muted); font-size: 11px; text-align: center;
     font-family: "Chakra Petch", sans-serif; text-transform: uppercase; letter-spacing: 1.2px; }
@@ -296,8 +297,9 @@
       var parts = bests.map(function (v, k) {
         return 'S' + (k + 1) + ' ' + (v / 1000).toFixed(3);
       });
+      var sep = '<span class="optsep">·</span>';
       html += '<div class="optlap">Optimal Lap:<b>' + fmtTime(tot) + '</b>' +
-        ' · ' + parts.join(' · ') + '</div>';
+        sep + parts.join(sep) + '</div>';
     }
     board.innerHTML = html;
   }
