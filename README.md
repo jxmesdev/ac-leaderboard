@@ -158,6 +158,9 @@ per-lap downloads. Laps are shareable via the `?show=` URL.
 ```
 ac_leaderboard/                  ← repo root == the AC app (clone here)
 ├── ac_leaderboard.py            ← in-game entry point + UI (the "glue")
+├── _ctypes.pyd                  ← from official CPython 3.3.5 amd64 (AC's
+│                                  stripped stdlib lacks it; conditions
+│                                  capture needs ctypes for shared memory)
 ├── config.example.json          ← optional; copy to config.json to tweak
 ├── send_debug.bat               ← one-click debug snapshot → GitHub
 ├── acl_core/                    ← pure-Python, unit-tested logic (no `ac` import)
