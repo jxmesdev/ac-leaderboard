@@ -128,19 +128,6 @@
   {
     "car": "ks_mazda_mx5_cup", 
     "config": "indy", 
-    "date": "2026-07-24T16:48:59Z", 
-    "source": "auto", 
-    "splits": [
-      92273, 
-      25264
-    ], 
-    "time_ms": 117537, 
-    "track": "ks_brands_hatch", 
-    "user": "Daren"
-  }, 
-  {
-    "car": "ks_mazda_mx5_cup", 
-    "config": "indy", 
     "date": "2026-07-24T16:49:59Z", 
     "source": "auto", 
     "splits": [
@@ -161,6 +148,19 @@
       45067
     ], 
     "time_ms": 86395, 
+    "track": "ks_brands_hatch", 
+    "user": "Daren"
+  }, 
+  {
+    "car": "ks_mazda_mx5_cup", 
+    "config": "indy", 
+    "date": "2026-07-24T16:52:22Z", 
+    "source": "auto", 
+    "splits": [
+      32658, 
+      23638
+    ], 
+    "time_ms": 56296, 
     "track": "ks_brands_hatch", 
     "user": "Daren"
   }
