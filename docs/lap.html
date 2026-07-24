@@ -684,17 +684,24 @@
         rows.push({color:l.color, txt:fmtVal(ch, v)});
       });
       if(rows.length){
+        var lenM = primary && primary.data ? primary.data.track_len_m : 0;
+        var hdr = lenM ? Math.round(cursor*lenM)+" m" : "";
         ctx.font="11px ui-monospace,Menlo,monospace";
-        var tw=0;
+        var tw=hdr ? ctx.measureText(hdr).width-14 : 0;
         rows.forEach(function(r0){ tw=Math.max(tw, ctx.measureText(r0.txt).width); });
-        var bw=tw+26, bh=rows.length*16+8;
+        var hh=hdr?15:0;
+        var bw=tw+26, bh=rows.length*16+8+hh;
         var bx=cx+10; if(bx+bw>PADL+plotW-4) bx=cx-10-bw;
         var by=PADT+6;
         ctx.globalAlpha=0.92; ctx.fillStyle=css("--panel2");
         ctx.fillRect(bx,by,bw,bh);
         ctx.globalAlpha=1; ctx.strokeStyle=linec; ctx.strokeRect(bx,by,bw,bh);
+        if(hdr){
+          ctx.fillStyle=css("--muted"); ctx.textAlign="left"; ctx.textBaseline="top";
+          ctx.fillText(hdr, bx+6, by+6);
+        }
         rows.forEach(function(r0,ri){
-          var ry=by+8+ri*16;
+          var ry=by+8+hh+ri*16;
           ctx.fillStyle=r0.color; ctx.fillRect(bx+6,ry,8,8);
           ctx.fillStyle=textc; ctx.textAlign="right"; ctx.textBaseline="top";
           ctx.fillText(r0.txt, bx+bw-6, ry-1);
