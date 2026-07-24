@@ -27,7 +27,7 @@
   .brand h1 .ln { color:var(--accent); }
   .brand p { margin:0 0 60px; color:var(--muted); font-size:12px;
     text-transform:uppercase; letter-spacing:2px; }
-  .wrap { max-width: 1920px; margin: 0 auto; padding: 40px 16px 60px; width: 100%;
+  .wrap { max-width: 2560px; margin: 0 auto; padding: 40px 16px 60px; width: 100%;
     min-height: 100vh; display: flex; flex-direction: column; }
   .wrap > * { flex: 0 0 auto; }
   .controls { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
@@ -61,10 +61,11 @@
   td.time, td.gap { text-align: right; font-variant-numeric: tabular-nums; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
   td.gap { color: var(--muted); }
   td.user { font-weight: 600; }
-  tr.p1 td.rank { color: var(--gold); font-weight: 700; }
+  tr.p1 td.rank { color: var(--gold); font-weight: 700; font-style: italic; }
   tr.p1 td.time { color: var(--accent); }
-  tr.p2 td.rank { color: var(--silver); font-weight: 700; }
-  tr.p3 td.rank { color: var(--bronze); font-weight: 700; }
+  tr.p2 td.rank { color: var(--silver); font-weight: 700; font-style: italic; }
+  tr.p3 td.rank { color: var(--bronze); font-weight: 700; font-style: italic; }
+  .secgap { font-size: 10px; }
   .badge { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); margin-left: 8px; vertical-align: middle; }
   tbody tr[data-href] { cursor: pointer; }
   tbody tr[data-href]:hover { background: var(--panel2); box-shadow: inset 3px 0 0 var(--accent); }
@@ -78,6 +79,29 @@
   .toggle button + button { border-left: 1px solid var(--line); }
   .toggle button.on { background: var(--accent); color: #0a0a0b; }
   .empty { padding: 40px 18px; text-align: center; color: var(--muted); }
+  .multi { position: relative; }
+  .multibtn {
+    width: 100%; text-align: left; appearance: none;
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 0; padding: 10px 12px;
+    font: 15px "Titillium Web", sans-serif; cursor: pointer;
+  }
+  .multibtn:focus { outline: none; border-color: var(--accent); }
+  .multibtn::after { content: "▾"; float: right; color: var(--muted); }
+  .multipop {
+    display: none; position: absolute; z-index: 30; left: 0; right: 0; top: 100%;
+    margin-top: 2px; background: var(--panel); border: 1px solid var(--line);
+    max-height: 280px; overflow: auto;
+  }
+  .multipop.open { display: block; }
+  .multipop label {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+    cursor: pointer; font: 15px "Titillium Web", sans-serif;
+    text-transform: none; letter-spacing: 0; color: var(--text);
+  }
+  .multipop label:hover { background: var(--panel2); }
+  .multipop label + label { border-top: 1px solid var(--line); }
+  .multipop input { accent-color: var(--accent); margin: 0; }
   @media (max-width: 760px) { .seccol { display: none; } }
   footer { margin-top: auto; padding-top: 64px; color: var(--muted); font-size: 11px; text-align: center;
     font-family: "Chakra Petch", sans-serif; text-transform: uppercase; letter-spacing: 1.2px; }
@@ -98,8 +122,11 @@
       <select id="combo"><option value="">Select combination…</option></select>
     </div>
     <div class="field">
-      <label for="user">Highlight driver</label>
-      <select id="user"><option value="">All drivers</option></select>
+      <label for="userbtn">Filter driver</label>
+      <div class="multi">
+        <button type="button" class="multibtn" id="userbtn">All drivers</button>
+        <div class="multipop" id="userpop"></div>
+      </div>
     </div>
   </div>
 
@@ -108,7 +135,7 @@
       <span class="combo" id="head">—</span>
       <span class="head-right">
         <span class="toggle" id="viewToggle">
-          <button type="button" id="viewAll">All laps</button><button type="button" id="viewBest">Best only</button>
+          <button type="button" id="viewBest">Best laps</button><button type="button" id="viewAll">All laps</button>
         </span>
         <span class="count" id="count"></span>
       </span>
@@ -121,10 +148,18 @@
 
 <script>
 (function () {
-  var records = [], users = [], highlight = "";
-  var viewMode = "all"; // "all" = every lap, "best" = each driver's fastest
+  var records = [], users = [];
+  var driverNames = [];   // display names, sorted, unique per ukey
+  var filterSel = {};     // ukey(name) -> true; empty = all drivers
+  function filterActive() { return Object.keys(filterSel).length > 0; }
+  // Driver names are user-typed: prefix object keys so names like
+  // "constructor" or "__proto__" can't collide with Object.prototype.
+  function ukey(u) { return "u:" + String(u == null ? "" : u).toLowerCase(); }
+  var viewMode = "best"; // "best" = each driver's fastest, "all" = every lap
   try {
-    var savedView = localStorage.getItem("acl_view_mode");
+    // v2 key: the default flipped to "best"; the old key would pin everyone
+    // to their previously-saved "all".
+    var savedView = localStorage.getItem("acl_view_mode2");
     if (savedView === "all" || savedView === "best") viewMode = savedView;
   } catch (e) { /* localStorage unavailable */ }
 
@@ -145,7 +180,7 @@
   function bestPerUser(rows) {
     var by = {};
     rows.forEach(function (r) {
-      var k = (r.user || "").toLowerCase();
+      var k = ukey(r.user);
       if (!by[k] || r.time_ms < by[k].time_ms) by[k] = r;
     });
     return Object.keys(by).map(function (k) { return by[k]; })
@@ -158,8 +193,9 @@
   function assignTrophies(rows) {
     var byUser = {};
     rows.forEach(function (r) {
-      var k = (r.user || "").toLowerCase();
-      (byUser[k] = byUser[k] || []).push(r);
+      var k = ukey(r.user);
+      if (!byUser[k]) byUser[k] = [];
+      byUser[k].push(r);
     });
     Object.keys(byUser).forEach(function (k) {
       byUser[k].sort(function (a, b) { return a.time_ms - b.time_ms; })
@@ -181,19 +217,26 @@
     }
     var all = records.filter(function (r) { return comboKey(r) === combo; })
       .slice().sort(function (a, b) { return a.time_ms - b.time_ms; });
-    var nDrivers = assignTrophies(all);
-    var rows = viewMode === "best" ? bestPerUser(all) : all;
-    head.textContent = rows.length ? comboLabel(rows[0]) : "—";
+    assignTrophies(all);   // trophies come from the FULL combo, filter or not
+    var pool = filterActive()
+      ? all.filter(function (r) { return filterSel[ukey(r.user)]; })
+      : all;
+    var rows = viewMode === "best" ? bestPerUser(pool) : pool;
+    head.textContent = all.length ? comboLabel(all[0]) : "—";
+    var vd = {};
+    rows.forEach(function (r) { vd[ukey(r.user)] = true; });
+    var nShown = Object.keys(vd).length;
     count.textContent = rows.length + (rows.length === 1 ? " lap" : " laps") +
-      " · " + nDrivers + (nDrivers === 1 ? " driver" : " drivers");
+      " · " + nShown + (nShown === 1 ? " driver" : " drivers");
     if (!rows.length) {
-      board.innerHTML = '<div class="empty">No times yet.</div>';
+      board.innerHTML = '<div class="empty">' + (filterActive()
+        ? "No laps for the selected drivers." : "No times yet.") + '</div>';
       return;
     }
-    var leader = rows[0].time_ms; // fastest lap shown in the current view mode
-    // sector columns (desktop only): as many as any lap in the combo has
+    var lead = rows[0]; // fastest lap shown in the current view + filter
+    // sector columns (desktop only): as many as any visible ROW has
     var nSec = 0;
-    all.forEach(function (r) {
+    rows.forEach(function (r) {
       if (r.splits && r.splits.length > nSec) nSec = Math.min(r.splits.length, 4);
     });
     var html = '<table><thead><tr><th>#</th><th>Driver</th>';
@@ -201,18 +244,27 @@
     html += '<th style="text-align:right">Time</th><th style="text-align:right">Gap</th></tr></thead><tbody>';
     rows.forEach(function (r, i) {
       var cls = i < 3 ? "p" + (i + 1) : "";
-      if (highlight && (r.user || "").toLowerCase() === highlight) cls += " hl";
       var badge = r.source === "manual" ? '<span class="badge">manual</span>' : "";
-      var trophy = r._trophy ? r._trophy + " " : "";
+      // Best-laps view: one row per driver, so medals are noise.
+      var trophy = (viewMode !== "best" && r._trophy) ? r._trophy + " " : "";
       html += '<tr class="' + cls + '" data-href="' + escapeHtml(lapHref(r)) + '">' +
         '<td class="rank">' + (i + 1) + '</td>' +
         '<td class="user">' + trophy + escapeHtml(r.user) + badge + '</td>';
       for (var sj = 0; sj < nSec; sj++) {
-        var sv = r.splits && r.splits[sj] != null ? (r.splits[sj] / 1000).toFixed(3) : "—";
-        html += '<td class="gap seccol">' + sv + '</td>';
+        var has = r.splits && r.splits[sj] != null;
+        var sv = has ? (r.splits[sj] / 1000).toFixed(3) : "—";
+        var sg = "";
+        // gap vs the leader's sector, small and red/green, left of the time
+        if (i > 0 && has && lead.splits && lead.splits[sj] != null) {
+          var d = r.splits[sj] - lead.splits[sj];
+          var gcol = d < 0 ? "var(--accent)" : (d > 0 ? "var(--danger)" : "var(--muted)");
+          sg = '<span class="secgap" style="color:' + gcol + '">(' +
+               (d >= 0 ? "+" : "") + (d / 1000).toFixed(3) + ')</span> ';
+        }
+        html += '<td class="gap seccol">' + sg + sv + '</td>';
       }
       html += '<td class="time">' + fmtTime(r.time_ms) + '</td>' +
-        '<td class="gap">' + fmtGap(r.time_ms - leader) + '</td></tr>';
+        '<td class="gap">' + fmtGap(r.time_ms - lead.time_ms) + '</td></tr>';
     });
     html += '</tbody></table>';
     board.innerHTML = html;
@@ -247,14 +299,49 @@
     });
   }
   function fillUsers() {
-    var all = {};
-    users.forEach(function (u) { all[u] = true; });
-    records.forEach(function (r) { if (r.user) all[r.user] = true; });
-    var sel = document.getElementById("user");
-    Object.keys(all).sort(function (a, b) { return a.localeCompare(b); }).forEach(function (u) {
-      var el = document.createElement("option");
-      el.value = u.toLowerCase(); el.textContent = u; sel.appendChild(el);
+    // unique per ukey: "Test" from users.json and "test" from a record must
+    // become ONE dropdown row, or the tick-everyone reset can never fire
+    var seen = {}, list = [];
+    users.concat(records.map(function (r) { return r.user; })).forEach(function (u) {
+      if (!u) return;
+      var k = ukey(u);
+      if (!seen[k]) { seen[k] = true; list.push(u); }
     });
+    driverNames = list.sort(function (a, b) { return a.localeCompare(b); });
+    renderUserFilter();
+  }
+
+  // "Filter driver" is a checkbox dropdown: tick any number of drivers and
+  // the board FILTERS to them (ticking everyone == no filter).
+  function renderUserFilter() {
+    var pop = document.getElementById("userpop");
+    var st = pop.scrollTop;   // rebuilding must not snap a long list to top
+    pop.innerHTML = "";
+    function addRow(text, checked, onchange) {
+      var lab = document.createElement("label");
+      var cb = document.createElement("input");
+      cb.type = "checkbox"; cb.checked = checked;
+      cb.addEventListener("change", onchange);
+      lab.appendChild(cb); lab.appendChild(document.createTextNode(text));
+      pop.appendChild(lab);
+    }
+    addRow("All drivers", !filterActive(), function () {
+      filterSel = {}; renderUserFilter(); render();
+    });
+    driverNames.forEach(function (u) {
+      var k = ukey(u);
+      addRow(u, !!filterSel[k], function (e) {
+        if (e.target.checked) filterSel[k] = true; else delete filterSel[k];
+        if (Object.keys(filterSel).length >= driverNames.length) filterSel = {};
+        renderUserFilter(); render();
+      });
+    });
+    var n = Object.keys(filterSel).length;
+    document.getElementById("userbtn").textContent =
+      !n ? "All drivers"
+        : n === 1 ? driverNames.filter(function (u) { return filterSel[ukey(u)]; })[0]
+        : n + " drivers";
+    pop.scrollTop = st;
   }
 
   function getJSON(url) {
@@ -271,13 +358,25 @@
   }
   function setView(mode) {
     viewMode = mode;
-    try { localStorage.setItem("acl_view_mode", mode); } catch (e) { /* ignore */ }
+    try { localStorage.setItem("acl_view_mode2", mode); } catch (e) { /* ignore */ }
     render();
   }
 
   document.getElementById("combo").addEventListener("change", render);
-  document.getElementById("user").addEventListener("change", function (e) {
-    highlight = e.target.value; render();
+  document.getElementById("userbtn").addEventListener("click", function (e) {
+    e.stopPropagation();
+    document.getElementById("userpop").classList.toggle("open");
+  });
+  document.addEventListener("click", function (e) {
+    var pop = document.getElementById("userpop");
+    if (pop.classList.contains("open") && !pop.contains(e.target)) {
+      pop.classList.remove("open");
+    }
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      document.getElementById("userpop").classList.remove("open");
+    }
   });
   document.getElementById("viewAll").addEventListener("click", function () { setView("all"); });
   document.getElementById("viewBest").addEventListener("click", function () { setView("best"); });
@@ -300,11 +399,6 @@
     var first = document.getElementById("combo");
     if (first.options.length === 2) { first.selectedIndex = 1; render(); }
   });
-
-  // Highlight style injected here to keep it near its logic.
-  var st = document.createElement("style");
-  st.textContent = "tr.hl td { background: color-mix(in srgb, var(--accent) 18%, transparent); }";
-  document.head.appendChild(st);
 })();
 </script>
 </body>

@@ -26,7 +26,7 @@
   .brand h1 .ln { color:var(--accent); }
   .brand p { margin:0 0 60px; color:var(--muted); font-size:12px;
     text-transform:uppercase; letter-spacing:2px; }
-  .wrap { max-width:1920px; margin:0 auto; padding:40px 16px 60px; width:100%;
+  .wrap { max-width:2560px; margin:0 auto; padding:40px 16px 60px; width:100%;
     min-height:100vh; display:flex; flex-direction:column; }
   .wrap > * { flex:0 0 auto; }
   a { color:var(--accent); text-decoration:none; }
@@ -288,10 +288,8 @@
     roster.sort(function(a,b){ return (a.time_ms||1e12)-(b.time_ms||1e12); });
     if(!roster.length){ fail("No telemetry found for this track & car combination."); return; }
 
-    laps = roster.map(function(r,i){
-      var c = PALETTE[i%PALETTE.length];
-      try { c = localStorage.getItem("aclc2:"+r.telemetry) || c; } catch(err) {}
-      return {rec:r, color:c, shown:false, data:null, loading:false};
+    laps = roster.map(function(r){
+      return {rec:r, color:PALETTE[0], shown:false, data:null, loading:false};
     });
     // trophies: within the combo, each driver's own laps ranked by time
     // (roster is time-sorted, so per-driver encounter order == their rank)
@@ -307,6 +305,7 @@
       primary = mine.filter(function(l){ return l.rec.time_ms===want.ms; })[0] || null;
     }
     if(!primary) primary = mine[0] || laps[0];
+    assignDefaultColors();
 
     applyTitles();
 
@@ -355,6 +354,30 @@
   }).catch(function(e){ fail("Could not load leaderboard data. " + e.message); });
 
   // ---- lap selection --------------------------------------------------
+  // The PRIMARY lap always defaults to the papaya PALETTE[0]; the other laps
+  // cycle through the rest of the palette in roster order. A colour picked by
+  // hand (saved in localStorage) always wins over the default.
+  function assignDefaultColors(){
+    var taken = {};
+    laps.forEach(function(l){
+      var c = null;
+      try { c = localStorage.getItem("aclc2:"+l.rec.telemetry); } catch(err) {}
+      l._savedColor = c;
+      if(c) taken[c.toLowerCase()] = true;
+    });
+    var next = 0;
+    laps.forEach(function(l){
+      if(l._savedColor){ l.color = l._savedColor; return; }
+      if(l === primary){ l.color = PALETTE[0]; return; }
+      // don't hand a default that duplicates a colour picked by hand
+      var c, tries = 0;
+      do {
+        c = PALETTE[1 + (next++ % (PALETTE.length - 1))];
+      } while (taken[c.toLowerCase()] && ++tries < PALETTE.length);
+      l.color = c;
+    });
+  }
+
   function setLapColor(l, c){
     l.color=c;
     try { localStorage.setItem("aclc2:"+l.rec.telemetry, c); } catch(err) {}
@@ -449,8 +472,14 @@
     var shown = laps.filter(function(x){ return x.shown; });
     if(shown.length === 1 && shown[0] !== l) toggleLap(shown[0], false);
     primary = l;
+    assignDefaultColors();
     laps.forEach(function(x){ x._delta = null; x._deltaFor = null; });
+    // recolouring + a new primary invalidate every cached render signature:
+    // sector bounds derive from the primary's splits, and the setups card
+    // shows lap swatches whose colours may just have changed.
+    _bounds = null;
     secSig = "";
+    setupSig = "";
     applyTitles();
     if(!l.shown){ toggleLap(l, true); }
     // sector focuses derive from the PRIMARY lap's splits: re-derive or reset
