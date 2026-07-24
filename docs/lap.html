@@ -1234,12 +1234,13 @@
       r+="<td>"+tgap+fmtTime(l.rec.time_ms)+"</td>";
       return r+"</tr>";
     }
-    html+=rowFor(primary, ps);
-    sl.forEach(function(l){
-      if(l===primary) return;
-      var sp=splitsOf(l); if(!sp) return;
-      html+=rowFor(l, sp);
-    });
+    // rows ordered fastest -> slowest, whichever lap is primary
+    sl.slice().sort(function(x, y){ return x.rec.time_ms - y.rec.time_ms; })
+      .forEach(function(l){
+        var sp = l===primary ? ps : splitsOf(l);
+        if(!sp) return;
+        html+=rowFor(l, sp);
+      });
     var tbl=document.createElement("table"); tbl.className="sectable";
     tbl.innerHTML=html+"</tbody>";
     body.appendChild(tbl);
