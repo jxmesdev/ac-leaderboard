@@ -1009,6 +1009,8 @@
   function attachMapInteraction(){
     var cv=document.getElementById("map"), dragging=false, lx=0, ly=0;
     cv.addEventListener("wheel", function(e){
+      // fully zoomed out + scrolling down: hand the wheel to the page
+      if(cam.scale <= 1 && e.deltaY > 0) return;
       e.preventDefault(); camAnim=null;
       if(mapFocus){ mapFocus=null; }
       if(!camCustom || secSig){ camCustom=true; secSig=""; scheduleRender(); }
