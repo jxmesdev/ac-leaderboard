@@ -991,7 +991,7 @@
           var pa=P(sa.x,sa.z), pb=P(sb.x,sb.z);
           ang=Math.atan2(pb[1]-pa[1], pb[0]-pa[0]);
         }
-        var L=l===primary?17:13, W=l===primary?8:6;
+        var L=15, W=7;
         ctx.save();
         ctx.translate(p[0],p[1]); ctx.rotate(ang);
         ctx.fillStyle=l.color; ctx.strokeStyle="#000"; ctx.lineWidth=1;
