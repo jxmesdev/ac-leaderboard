@@ -1,0 +1,174 @@
+=== debug.log ===================================== 
+acMain: start
+acMain: build ok
+git: syncing
+git status -> syncing
+session: track=ks_brands_hatch cfg=indy car=ks_mazda_mx5_cup
+gitsync: cycle 1 start
+gitsync: cycle ok
+git status -> synced
+pick fired: 1
+update: pick 1
+git status -> syncing
+git: syncing
+gitsync: cycle 1 start
+gitsync: cycle ok
+git: synced
+git status -> synced
+telemetry build failed:
+Traceback (most recent call last):
+  File "apps/python/ac_leaderboard\ac_leaderboard.py", line 513, in _build_telemetry
+    self.outbox.add_asset(tm[0], tm[1])
+  File "C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\apps\python\ac_leaderboard\acl_core\outbox.py", line 149, in add_asset
+    self._stage_bytes(rel, data)
+  File "C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\apps\python\ac_leaderboard\acl_core\outbox.py", line 98, in _stage_bytes
+    path = self._asset_file(rel)
+  File "C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\apps\python\ac_leaderboard\acl_core\outbox.py", line 94, in _asset_file
+    flat = rel.replace("\\", "__").replace("/", "__")
+AttributeError: 'dict' object has no attribute 'replace'
+
+git: syncing
+git status -> syncing
+gitsync: cycle 1 start
+gitsync: data changed -> version 1
+gitsync: cycle ok
+git: synced
+ synced
+sync: data changed, reloading board
+git: syncing
+git status -> syncing
+gitsync: cycle 1 start
+gitsync: cycle ok
+git status -> synced
+telemetry build failed:
+Traceback (most recent call last):
+  File "apps/python/ac_leaderboard\ac_leaderboard.py", line 513, in _build_telemetry
+    self.outbox.add_asset(tm[0], tm[1])
+  File "C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\apps\python\ac_leaderboard\acl_core\outbox.py", line 149, in add_asset
+    self._stage_bytes(rel, data)
+  File "C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\apps\python\ac_leaderboard\acl_core\outbox.py", line 98, in _stage_bytes
+    path = self._asset_file(rel)
+  File "C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\apps\python\ac_leaderboard\acl_core\outbox.py", line 94, in _asset_file
+    flat = rel.replace("\\", "__").replace("/", "__")
+AttributeError: 'dict' object has no attribute 'replace'
+
+git status -> syncing
+gitsync: cycle 1 start
+gitsync: data changed -> version 2
+gitsync: cycle ok
+git status -> synced
+git: synced
+sync: data changed, reloading board
+ 
+=== current_setup.ini (live capture) ============== 
+[ABS]
+VALUE=1
+
+[ARB_FRONT]
+VALUE=3
+
+[ARB_REAR]
+VALUE=1
+
+[BRAKE_POWER_MULT]
+VALUE=100
+
+[CAMBER_LF]
+VALUE=-30
+
+[CAMBER_LR]
+VALUE=-9
+
+[CAMBER_RF]
+VALUE=-30
+
+[CAMBER_RR]
+VALUE=-9
+
+[CAR]
+MODEL=ks_mazda_mx5_cup
+
+[DAMP_BUMP_LF]
+VALUE=5
+
+[DAMP_BUMP_LR]
+VALUE=4
+
+[DAMP_BUMP_RF]
+VALUE=5
+
+[DAMP_BUMP_RR]
+VALUE=4
+
+[DAMP_REBOUND_LF]
+VALUE=5
+
+[DAMP_REBOUND_LR]
+VALUE=6
+
+[DAMP_REBOUND_RF]
+VALUE=5
+
+[DAMP_REBOUND_RR]
+VALUE=6
+
+[FUEL]
+VALUE=30
+
+[PRESSURE_LF]
+VALUE=17
+
+[PRESSURE_LR]
+VALUE=17
+
+[PRESSURE_RF]
+VALUE=17
+
+[PRESSURE_RR]
+VALUE=17
+
+[ROD_LENGTH_LF]
+VALUE=10
+
+[ROD_LENGTH_LR]
+VALUE=10
+
+[ROD_LENGTH_RF]
+VALUE=10
+
+[ROD_LENGTH_RR]
+VALUE=10
+
+[SPRING_RATE_LF]
+VALUE=51
+
+[SPRING_RATE_LR]
+VALUE=77
+
+[SPRING_RATE_RF]
+VALUE=51
+
+[SPRING_RATE_RR]
+VALUE=77
+
+[TOE_OUT_LF]
+VALUE=6
+
+[TOE_OUT_LR]
+VALUE=20
+
+[TOE_OUT_RF]
+VALUE=6
+
+[TOE_OUT_RR]
+VALUE=20
+
+[TRACTION_CONTROL]
+VALUE=1
+
+[TYRES]
+VALUE=0
+
+[__EXT_PATCH]
+VERSION=0.2.11
+
