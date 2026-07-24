@@ -119,7 +119,7 @@
     .readout .habbr { display:inline; }
   }
   .hint { color:var(--muted); font-size:12px; padding:0 14px 12px; }
-  canvas.trace { width:100%; display:block; touch-action:none; }
+  canvas.trace { width:100%; display:block; touch-action:none; cursor:crosshair; }
   .tracetitle { font:600 11px "Chakra Petch",sans-serif; text-transform:uppercase;
     letter-spacing:1px; color:var(--muted); padding:10px 8px 2px 46px; }
   .empty { padding:40px; text-align:center; color:var(--muted); }
@@ -277,6 +277,8 @@
   var cam = {scale:1, x:0, y:0};   // map zoom/pan on top of the fit-to-view
   var mapFocus = null;   // {i, d0, d1} sector focus of the MAP camera
   var traceFocus = null; // {i, d0, d1} sector focus of the TRACES x-domain
+                         // (i === -2 for a drag-selected custom range)
+  var traceSel = null;   // {d0, d1} shaded band while drag-selecting
   var mapFitPending = false;   // drawMap should recompute cam for the focus
   var camAnim = null;          // {from, to, t0} camera fly-to animation
   var camCustom = false;       // user panned/zoomed away: no sector chip active
@@ -512,7 +514,9 @@
       } else { focusMapAll(); }
     }
     if(traceFocus){
-      if(nb && nb[traceFocus.i]){
+      if(traceFocus.i === -2){
+        // drag-selected range is in nsp space -- valid for any primary
+      } else if(nb && nb[traceFocus.i]){
         traceFocus = {i:traceFocus.i, d0:nb[traceFocus.i][0], d1:nb[traceFocus.i][1]};
         startDomAnim();
       } else { focusTraceAll(); }
@@ -712,6 +716,18 @@
     // traces + cursor, clipped to the plot so sector focus just works
     ctx.save();
     ctx.beginPath(); ctx.rect(PADL, PADT, plotW, plotH); ctx.clip();
+    // drag-select band (shared domain -> shades every trace in step)
+    if(traceSel){
+      var sx0=xOf(Math.min(traceSel.d0, traceSel.d1));
+      var sx1=xOf(Math.max(traceSel.d0, traceSel.d1));
+      ctx.fillStyle=css("--accent"); ctx.globalAlpha=0.10;
+      ctx.fillRect(sx0, PADT, sx1-sx0, plotH);
+      ctx.globalAlpha=0.5; ctx.strokeStyle=css("--accent"); ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.moveTo(sx0, PADT); ctx.lineTo(sx0, PADT+plotH);
+      ctx.moveTo(sx1, PADT); ctx.lineTo(sx1, PADT+plotH);
+      ctx.stroke(); ctx.globalAlpha=1;
+    }
     sl.forEach(function(l){
       var xs=l.data.nsp, ys=seriesOf(l, ch), n=xs.length;
       if(!ys) return;
@@ -1181,6 +1197,11 @@
     traceFocus={i:i, d0:b[i][0], d1:b[i][1]};
     startDomAnim(); secSig=""; scheduleRender();
   }
+  // drag-selected custom range: no sector chip lights up (i === -2)
+  function focusTraceRange(d0, d1){
+    traceFocus={i:-2, d0:d0, d1:d1};
+    startDomAnim(); secSig=""; scheduleRender();
+  }
   function focusTraceAll(){
     traceFocus=null;
     startDomAnim(); secSig=""; scheduleRender();
@@ -1413,20 +1434,48 @@
     return Math.round(v)+"%";   // thr / brk
   }
   function attachHover(){
-    function handle(e, cv, ch){
+    // map a clientX into the (possibly focused) trace domain
+    function domAt(cv, clientX){
       var rect=cv.getBoundingClientRect();
-      var cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
+      var cx=clientX-rect.left;
       var plotW=cv.clientWidth-PADL-PADR;
       var dom=traceDomain();
       var f=Math.max(0,Math.min(1,(cx-PADL)/plotW));
-      cursor=dom[0]+f*(dom[1]-dom[0]);   // map mouse x into the (possibly focused) domain
+      return dom[0]+f*(dom[1]-dom[0]);
+    }
+    function handle(e, cv, ch){
+      cursor=domAt(cv, e.touches?e.touches[0].clientX:e.clientX);
       scheduleRender();
     }
+    // horizontal click-drag on any trace: shade the selection across all
+    // traces, zoom the x-domain into it on release (mouse only -- touch
+    // keeps its cursor-scrub behaviour)
+    var drag=null;    // {cv, x0} while the button is down
     traceCanvases.forEach(function(t){
       t.cv.addEventListener("mousemove",function(e){ handle(e,t.cv,t.ch); });
       t.cv.addEventListener("touchmove",function(e){ handle(e,t.cv,t.ch); e.preventDefault(); }, {passive:false});
+      t.cv.addEventListener("mousedown", function(e){
+        if(e.button!==0) return;
+        var d=domAt(t.cv, e.clientX);
+        drag={cv:t.cv, x0:e.clientX};
+        traceSel={d0:d, d1:d};
+        e.preventDefault();
+      });
     });
-
+    window.addEventListener("mousemove", function(e){
+      if(!drag) return;
+      traceSel.d1=domAt(drag.cv, e.clientX);
+      scheduleRender();
+    });
+    window.addEventListener("mouseup", function(e){
+      if(!drag) return;
+      var wide=Math.abs(e.clientX-drag.x0)>=8;   // a plain click is not a zoom
+      var d0=Math.min(traceSel.d0, traceSel.d1);
+      var d1=Math.max(traceSel.d0, traceSel.d1);
+      drag=null; traceSel=null;
+      if(wide && d1-d0>1e-4) focusTraceRange(d0, d1);
+      else scheduleRender();                      // just clear the band
+    });
   }
 })();
 </script>
