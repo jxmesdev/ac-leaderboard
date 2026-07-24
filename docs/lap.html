@@ -124,7 +124,7 @@
     .readout .habbr { display:inline; }
   }
   .hint { color:var(--muted); font-size:12px; padding:0 14px 12px; }
-  canvas.trace { width:100%; display:block; touch-action:none; cursor:crosshair; }
+  canvas.trace { width:100%; display:block; touch-action:pan-y; cursor:crosshair; }
   .tracetitle { font:600 11px "Chakra Petch",sans-serif; text-transform:uppercase;
     letter-spacing:1px; color:var(--muted); padding:10px 8px 2px 46px; }
   .empty { padding:40px; text-align:center; color:var(--muted); }
@@ -136,12 +136,20 @@
   .card.collapsed > h2.tgl { border-bottom:none; }
   .card.shut > h2.tgl::after { transform:scaleY(1); }       /* chevron down */
   .card.collapsed > *:not(h2) { display:none !important; }
+  /* mobile-only toggles: no chevron or pointer on desktop */
+  @media (min-width:761px){
+    .card > h2.tglm { cursor:default; }
+    .card > h2.tglm::after { display:none; }
+  }
   .card.anim { transition:height .25s ease; overflow:hidden; }
   .sectors { margin-top:16px; }
   .secbody { padding:10px 14px 12px; overflow-x:auto; }
   .optlap { margin-top:10px; padding-top:10px; border-top:1px solid var(--line);
     color:var(--muted); font-size:12px;
-    display:flex; align-items:center; line-height:1; }
+    display:flex; align-items:center; line-height:1;
+    flex-wrap:wrap; row-gap:6px; }
+  .opthow { margin-left:auto; padding-left:16px; font-size:10px;
+    color:var(--muted); opacity:.75; }
   .optlap b { color:var(--accent); font-weight:600; margin-left:8px;
     font-family:ui-monospace,"SF Mono",Menlo,monospace;
     position:relative; top:1px; }
@@ -225,7 +233,7 @@
           <div class="mapwrap">
             <div class="secbtns mapsec" id="mapsec"></div>
             <canvas id="map"></canvas>
-            <div class="hint" style="padding:6px 4px 0">scroll = zoom · drag = pan · double-click = reset</div>
+            <div class="hint" id="maphint" style="padding:6px 4px 0">scroll = zoom · drag = pan · double-click = reset</div>
           </div>
         </div>
         <div class="card" id="cursorcard">
@@ -616,14 +624,38 @@
     ["cursorcard", "conditions", "traces", "setups"].forEach(function(id){
       makeCollapsible(document.getElementById(id));
     });
+    // on phones EVERY card collapses; on desktop these three stay fixed
+    ["mapcard", "lapscard", "sectors"].forEach(function(id){
+      makeCollapsible(document.getElementById(id), true);
+    });
+    // widening past the breakpoint must never strand a card collapsed
+    // with its chevron hidden
+    function unstrand(){
+      if(mobileMq.matches) return;
+      ["mapcard", "lapscard", "sectors"].forEach(function(id){
+        var c = document.getElementById(id);
+        if(c) c.classList.remove("collapsed", "shut");
+      });
+      scheduleRender();
+    }
+    if(mobileMq.addEventListener) mobileMq.addEventListener("change", unstrand);
+    else if(mobileMq.addListener) mobileMq.addListener(unstrand);
+    // touch devices: the map is two-finger driven so the page still scrolls
+    if(window.matchMedia("(pointer: coarse)").matches){
+      var mh = document.getElementById("maphint");
+      if(mh) mh.textContent = "two fingers = pan & zoom · double-tap = reset";
+    }
   }
 
-  function makeCollapsible(card){
+  var mobileMq = window.matchMedia("(max-width:760px)");
+  function makeCollapsible(card, mobileOnly){
     if(!card) return;
     var h = card.querySelector("h2");
     if(!h || h.classList.contains("tgl")) return;
     h.classList.add("tgl");
+    if(mobileOnly) h.classList.add("tglm");
     h.addEventListener("click", function(){
+      if(mobileOnly && !mobileMq.matches) return;   // desktop: not a toggle
       if(card._animT){ clearTimeout(card._animT); }
       var hH = h.offsetHeight;
       card.classList.add("anim");
@@ -1168,6 +1200,45 @@
     cv.addEventListener("dblclick", function(){
       focusMapAll();   // resets the camera + map bar; traces keep their focus
     });
+    // touch: ONE finger scrolls the page as normal; TWO fingers pan and
+    // pinch-zoom the map; double-tap resets. Page scroll stays intact.
+    var tDist=0, tMidX=0, tMidY=0, lastTap=0;
+    function touchMid(e, r){
+      return [(e.touches[0].clientX+e.touches[1].clientX)/2-r.left,
+              (e.touches[0].clientY+e.touches[1].clientY)/2-r.top];
+    }
+    function touchDist(e){
+      var dx=e.touches[0].clientX-e.touches[1].clientX;
+      var dy=e.touches[0].clientY-e.touches[1].clientY;
+      return Math.sqrt(dx*dx+dy*dy);
+    }
+    cv.addEventListener("touchstart", function(e){
+      if(e.touches.length===2){
+        e.preventDefault(); camAnim=null;
+        var r=cv.getBoundingClientRect(), m=touchMid(e, r);
+        tMidX=m[0]; tMidY=m[1]; tDist=touchDist(e);
+      } else if(e.touches.length===1){
+        var now=Date.now();
+        if(now-lastTap<300){ e.preventDefault(); focusMapAll(); }
+        lastTap=now;
+      }
+    }, {passive:false});
+    cv.addEventListener("touchmove", function(e){
+      if(e.touches.length!==2) return;   // one finger: browser scrolls page
+      e.preventDefault();
+      if(mapFocus){ mapFocus=null; }
+      if(!camCustom){ camCustom=true; secSig=""; }
+      var r=cv.getBoundingClientRect(), m=touchMid(e, r), d=touchDist(e);
+      if(tDist>0){
+        var ns=Math.max(1, Math.min(14, cam.scale*(d/tDist)));
+        cam.x = m[0]-(m[0]-cam.x)*(ns/cam.scale);
+        cam.y = m[1]-(m[1]-cam.y)*(ns/cam.scale);
+        cam.scale=ns;
+      }
+      cam.x += m[0]-tMidX; cam.y += m[1]-tMidY;
+      tMidX=m[0]; tMidY=m[1]; tDist=d;
+      scheduleRender();
+    }, {passive:false});
     cv.style.cursor="grab";
     // hover -> cursor: nearest PRIMARY-lap sample in screen space (<=25 px),
     // via the exact transform of the last draw so pan/zoom is accounted for.
@@ -1449,6 +1520,7 @@
       bests.forEach(function(v, oi){
         oh+="<span class='optsep'>·</span>S"+(oi+1)+": "+fmtSec(v);
       });
+      oh+="<span class='opthow'>fastest sectors of the selected laps, combined</span>";
       opt.innerHTML=oh;
       body.appendChild(opt);
     }
@@ -1526,7 +1598,24 @@
     var drag=null;    // {cv, x0} while the button is down
     traceCanvases.forEach(function(t){
       t.cv.addEventListener("mousemove",function(e){ handle(e,t.cv,t.ch); });
-      t.cv.addEventListener("touchmove",function(e){ handle(e,t.cv,t.ch); e.preventDefault(); }, {passive:false});
+      // touch: decide the gesture's direction once -- horizontal scrubs the
+      // cursor, vertical is handed to the browser so the PAGE scrolls
+      var tmode=null, tx0=0, ty0=0;
+      t.cv.addEventListener("touchstart", function(e){
+        if(e.touches.length===1){
+          tmode=null; tx0=e.touches[0].clientX; ty0=e.touches[0].clientY;
+        }
+      });
+      t.cv.addEventListener("touchmove",function(e){
+        if(e.touches.length!==1) return;
+        if(tmode===null){
+          var dx=Math.abs(e.touches[0].clientX-tx0);
+          var dy=Math.abs(e.touches[0].clientY-ty0);
+          if(dx<6 && dy<6) return;             // undecided yet
+          tmode = dx>dy ? "h" : "v";
+        }
+        if(tmode==="h"){ handle(e,t.cv,t.ch); e.preventDefault(); }
+      }, {passive:false});
       t.cv.addEventListener("mousedown", function(e){
         if(e.button!==0) return;
         var d=domAt(t.cv, e.clientX);

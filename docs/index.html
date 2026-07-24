@@ -106,7 +106,10 @@
     color: var(--muted); font-size: 12px;
     /* mixed fonts (mono time vs sans labels) sit on different baselines --
        centre every piece on the same line instead */
-    display: flex; align-items: center; line-height: 1; }
+    display: flex; align-items: center; line-height: 1;
+    flex-wrap: wrap; row-gap: 6px; }
+  .opthow { margin-left: auto; padding-left: 16px; font-size: 10px;
+    color: var(--muted); opacity: .75; }
   .optlap b { color: var(--accent); font-weight: 600; margin-left: 8px;
     font-family: ui-monospace, "SF Mono", Menlo, monospace; }
   .optlap .optsep { margin: 0 8px; }
@@ -311,7 +314,9 @@
       });
       var sep = '<span class="optsep">·</span>';
       html += '<div class="optlap">Optimal Lap:<b>' + fmtTime(tot) + '</b>' +
-        sep + parts.join(sep) + '</div>';
+        sep + parts.join(sep) +
+        '<span class="opthow">fastest sectors of the filtered laps, combined</span>' +
+        '</div>';
     }
     board.innerHTML = html;
   }
