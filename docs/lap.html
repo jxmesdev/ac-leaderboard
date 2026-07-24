@@ -47,18 +47,21 @@
   #title { font:italic 600 20px "Chakra Petch", sans-serif; text-transform:uppercase;
     letter-spacing:.4px; margin-bottom:8px; }
   .sub { color:var(--muted); font-size:13px; }
-  .layout { display:grid; grid-template-columns:1fr; gap:16px; margin-top:20px; }
-  .layout .card { margin-top:0; }
+  /* minmax(0,…) + min-width:0: a wide table must scroll INSIDE its card,
+     never widen the grid track past the viewport (mobile, 3+ laps) */
+  .layout { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; margin-top:20px; }
+  .layout .card { margin-top:0; min-width:0; }
   .colL, .colR, .pair { display:contents; }
   #mapcard{order:1} #lapscard{order:2} #cursorcard{order:3}
   #sectors{order:4} #traces{order:5} #setups{order:6}
   @media (min-width:1281px){
-    .layout { grid-template-columns:1fr 1fr; align-items:start; }
+    .layout { grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start; }
     .colL, .colR { display:flex; flex-direction:column; gap:16px; min-width:0; }
     /* top row: laps | sectors, equal height. Laps content scrolls within a
        fixed base height; if Sectors outgrows it, BOTH cards grow together
        (grid stretch) and nothing scrolls in Sectors. */
-    .pair { grid-column:1 / -1; display:grid; grid-template-columns:1fr 1fr;
+    .pair { grid-column:1 / -1; display:grid;
+      grid-template-columns:minmax(0,1fr) minmax(0,1fr);
       gap:16px; align-items:stretch; }
     #lapscard { display:flex; flex-direction:column; min-height:235px; }
     #lapscard .laps { flex:1 1 0; max-height:none; min-height:0; overflow-y:auto; }
@@ -94,7 +97,7 @@
     font-family:ui-monospace,Menlo,monospace; color:var(--muted); }
   .lap .dl { font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace; font-size:12px; }
   .traces { margin-top:16px; }
-  .readout { padding:10px 14px; }
+  .readout { padding:10px 14px; overflow-x:auto; }
   .readout table { width:100%; border-collapse:collapse; font-size:12px;
     table-layout:fixed; }
   .readout th:first-child { width:22%; }
@@ -105,6 +108,11 @@
   .readout th:first-child, .readout td:first-child { text-align:left; }
   .readout thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
+  .readout .habbr { display:none; }
+  @media (max-width:760px){
+    .readout .hfull { display:none; }
+    .readout .habbr { display:inline; }
+  }
   .hint { color:var(--muted); font-size:12px; padding:0 14px 12px; }
   canvas.trace { width:100%; display:block; touch-action:none; }
   .tracetitle { font:600 11px "Chakra Petch",sans-serif; text-transform:uppercase;
@@ -120,7 +128,7 @@
   .card.collapsed > *:not(h2) { display:none !important; }
   .card.anim { transition:height .25s ease; overflow:hidden; }
   .sectors { margin-top:16px; }
-  .secbody { padding:10px 14px 12px; }
+  .secbody { padding:10px 14px 12px; overflow-x:auto; }
   .secbtns { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
   #tracesec { margin:10px 14px 14px; }
   .secbtns button { background:var(--panel2); color:var(--text); border:1px solid var(--line);
@@ -152,7 +160,8 @@
   .setuptable tbody tr:not(.dlrow):hover td:last-child { border-radius:0 6px 6px 0; }
   .setuptable button.dlbtn { background:var(--panel2); color:var(--text);
     border:1px solid var(--line); padding:2px 8px; font:600 10px "Chakra Petch",sans-serif;
-    text-transform:uppercase; letter-spacing:.5px; cursor:pointer; }
+    text-transform:uppercase; letter-spacing:.5px; cursor:pointer;
+    white-space:nowrap; }
   .setuptable button.dlbtn:hover { border-color:var(--accent); color:var(--accent); }
   .setupdl { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
   .setupdl button { background:var(--panel2); color:var(--text); border:1px solid var(--line);
@@ -229,11 +238,11 @@
   // Martini white, BWT pink, Renault yellow, Petronas teal, violet, salmon.
   var PALETTE = ["#ff8000","#b8ff00","#00a2ff","#ff2e2e","#f5f5f5","#ff66cc","#ffd300","#00d2be","#a78bfa","#ff9e80"];
   var CH = [
-    {key:"thr",  label:"Throttle", unit:"%",    lo:0, hi:100},
-    {key:"brk",  label:"Brake",    unit:"%",    lo:0, hi:100},
-    {key:"spd",  label:"Speed",    unit:"km/h", lo:0, hi:"auto"},
-    {key:"gear", label:"Gear",     unit:"",     lo:0, hi:"auto", step:true},
-    {key:"str",  label:"Steering", unit:"°", lo:"sym", hi:"sym"}
+    {key:"thr",  label:"Throttle", abbr:"Thr",  unit:"%",    lo:0, hi:100},
+    {key:"brk",  label:"Brake",    abbr:"Brk",  unit:"%",    lo:0, hi:100},
+    {key:"spd",  label:"Speed",    abbr:"Spd",  unit:"km/h", lo:0, hi:"auto"},
+    {key:"gear", label:"Gear",     abbr:"Gear", unit:"",     lo:0, hi:"auto", step:true},
+    {key:"str",  label:"Steering", abbr:"Str",  unit:"°", lo:"sym", hi:"sym"}
   ];
 
   // Extra computed trace: time gap to the primary lap along the lap.
@@ -1092,7 +1101,11 @@
       }
     }
     var html = "<thead><tr><th>Lap</th>";
-    CH.forEach(function(c){ html+="<th>"+c.label+"</th>"; });
+    // full names on desktop, abbreviations on narrow screens (CSS swaps)
+    CH.forEach(function(c){
+      html+="<th><span class='hfull'>"+c.label+"</span>"+
+        "<span class='habbr'>"+(c.abbr||c.label)+"</span></th>";
+    });
     html += "<th>Gap</th></tr></thead><tbody>";
     var p = primary && primary.shown && primary.data ? sampleAt(primary.data, cursor) : null;
     sl.forEach(function(l){
