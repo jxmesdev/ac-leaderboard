@@ -55,8 +55,14 @@
   @media (min-width:1281px){
     .layout { grid-template-columns:1fr 1fr; align-items:start; }
     .colL, .colR { display:flex; flex-direction:column; gap:16px; min-width:0; }
-    .pair { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
-    .pair .sectable th, .pair .sectable td { padding-left:16px; }
+    /* top row: laps | sectors, equal height. Laps content scrolls within a
+       fixed base height; if Sectors outgrows it, BOTH cards grow together
+       (grid stretch) and nothing scrolls in Sectors. */
+    .pair { grid-column:1 / -1; display:grid; grid-template-columns:1fr 1fr;
+      gap:16px; align-items:stretch; }
+    #lapscard { display:flex; flex-direction:column; min-height:420px; }
+    #lapscard .laps { flex:1 1 0; max-height:none; min-height:0; overflow-y:auto; }
+    #sectors { display:flex; flex-direction:column; }
   }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:0; }
   .card h2 { font:600 11px "Chakra Petch", sans-serif; text-transform:uppercase; letter-spacing:1.2px;
@@ -177,17 +183,17 @@
 
   <div id="content" style="display:none">
     <div class="layout">
-      <div class="colL">
-        <div class="pair">
-          <div class="card" id="lapscard">
-            <h2>Laps</h2>
-            <div class="laps" id="laps"></div>
-          </div>
-          <div class="card" id="sectors" style="display:none">
-            <h2>Sectors</h2>
-            <div class="secbody" id="secbody"></div>
-          </div>
+      <div class="pair">
+        <div class="card" id="lapscard">
+          <h2>Laps</h2>
+          <div class="laps" id="laps"></div>
         </div>
+        <div class="card" id="sectors" style="display:none">
+          <h2>Sectors</h2>
+          <div class="secbody" id="secbody"></div>
+        </div>
+      </div>
+      <div class="colL">
         <div class="card" id="mapcard">
           <h2>Track map</h2>
           <div class="mapwrap">
@@ -438,6 +444,9 @@
 
   function setPrimary(l){
     if(l===primary) return;
+    // comparing nothing? swap the shown lap instead of stacking a second one
+    var shown = laps.filter(function(x){ return x.shown; });
+    if(shown.length === 1 && shown[0] !== l) toggleLap(shown[0], false);
     primary = l;
     laps.forEach(function(x){ x._delta = null; x._deltaFor = null; });
     secSig = "";
@@ -511,7 +520,7 @@
     attachHover();
     attachMapInteraction();
     window.addEventListener("resize", scheduleRender);
-    ["cursorcard", "sectors", "traces", "setups"].forEach(function(id){
+    ["cursorcard", "traces", "setups"].forEach(function(id){
       makeCollapsible(document.getElementById(id));
     });
   }
