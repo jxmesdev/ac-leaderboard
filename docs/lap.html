@@ -981,8 +981,22 @@
       sl.forEach(function(l){
         var sm=sampleAt(l.data,cursor); if(!sm) return;
         var p=P(sm.x,sm.z);
+        // orientation from the path just before/after the cursor, computed
+        // in SCREEN space so pan/zoom/flip are automatically accounted for
+        var eps=0.0012;
+        var sa=sampleAt(l.data, Math.max(0, cursor-eps));
+        var sb=sampleAt(l.data, Math.min(0.9999, cursor+eps));
+        var ang=0;
+        if(sa && sb){
+          var pa=P(sa.x,sa.z), pb=P(sb.x,sb.z);
+          ang=Math.atan2(pb[1]-pa[1], pb[0]-pa[0]);
+        }
+        var L=l===primary?17:13, W=l===primary?8:6;
+        ctx.save();
+        ctx.translate(p[0],p[1]); ctx.rotate(ang);
         ctx.fillStyle=l.color; ctx.strokeStyle="#000"; ctx.lineWidth=1;
-        ctx.beginPath(); ctx.arc(p[0],p[1], l===primary?6.5:5, 0,7); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.rect(-L/2,-W/2,L,W); ctx.fill(); ctx.stroke();
+        ctx.restore();
       });
     }
   }
