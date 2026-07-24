@@ -189,11 +189,6 @@
     var t = pretty(r.track) + (r.config ? " (" + pretty(r.config) + ")" : "");
     return t + " — " + pretty(r.car);
   }
-  function fmtGap(ms) {
-    if (!ms) return "";
-    return "+" + Math.floor(ms / 1000) + "." + String(ms % 1000).padStart(3, "0");
-  }
-
   function bestPerUser(rows) {
     var by = {};
     rows.forEach(function (r) {
@@ -259,16 +254,25 @@
     var html = '<table><thead><tr><th>#</th><th>Driver</th>' +
       '<th style="text-align:right">Time</th>';
     for (var si = 0; si < nSec; si++) html += '<th class="seccol" style="text-align:right">S' + (si + 1) + '</th>';
-    html += '<th style="text-align:right">Gap</th></tr></thead><tbody>';
+    html += '</tr></thead><tbody>';
     rows.forEach(function (r, i) {
       var cls = i < 3 ? "p" + (i + 1) : "";
       var badge = r.source === "manual" ? '<span class="badge">manual</span>' : "";
       // Best-laps view: one row per driver, so medals are noise.
       var trophy = (viewMode !== "best" && r._trophy) ? r._trophy + " " : "";
+      // gap vs the leader sits left of the time, small and red/green,
+      // matching the sector columns; the leader row stays bare
+      var tg = "";
+      if (i > 0) {
+        var td = r.time_ms - lead.time_ms;
+        var tcol = td < 0 ? "var(--accent)" : (td > 0 ? "var(--danger)" : "var(--muted)");
+        tg = '<span class="secgap" style="color:' + tcol + '">(' +
+             (td >= 0 ? "+" : "") + (td / 1000).toFixed(3) + ')</span> ';
+      }
       html += '<tr class="' + cls + '" data-href="' + escapeHtml(lapHref(r)) + '">' +
         '<td class="rank">' + (i + 1) + '</td>' +
         '<td class="user">' + trophy + escapeHtml(r.user) + badge + '</td>' +
-        '<td class="time">' + fmtTime(r.time_ms) + '</td>';
+        '<td class="time">' + tg + fmtTime(r.time_ms) + '</td>';
       for (var sj = 0; sj < nSec; sj++) {
         var has = r.splits && r.splits[sj] != null;
         var sv = has ? (r.splits[sj] / 1000).toFixed(3) : "—";
@@ -282,7 +286,7 @@
         }
         html += '<td class="gap seccol">' + sg + sv + '</td>';
       }
-      html += '<td class="gap">' + fmtGap(r.time_ms - lead.time_ms) + '</td></tr>';
+      html += '</tr>';
     });
     html += '</tbody></table>';
     // Optimal lap: best of each sector across the FILTERED laps (pool, both
