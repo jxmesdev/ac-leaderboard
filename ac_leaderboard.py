@@ -20,7 +20,13 @@ if APP_DIR not in sys.path:
 
 import ac  # provided by Assetto Corsa
 
-from acl_core import ac_data, ailine, config, luainstall, setups, siminfo, storage, telemetry, trackmap
+from acl_core import ac_data, ailine, config, luainstall, setups, storage, telemetry, trackmap
+try:
+    # optional: conditions capture (needs ctypes/mmap, which AC's stripped
+    # interpreter may lack -- NEVER let this kill the app at import)
+    from acl_core import siminfo
+except Exception:
+    siminfo = None
 from acl_core.git_sync import GitSync
 from acl_core.outbox import Outbox
 from acl_core.leaderboard import leaderboard_for
@@ -540,11 +546,16 @@ class LeaderboardApp(object):
             log("edges attach failed:\n" + traceback.format_exc())
         try:
             # session conditions from AC's shared memory (no python API)
-            cond = siminfo.read_conditions()
-            if cond is not None:
-                payload["conditions"] = cond
+            if siminfo is None:
+                log("conditions: siminfo module failed to import")
             else:
-                log("conditions: shared memory unavailable")
+                cond = siminfo.read_conditions()
+                if cond is not None:
+                    payload["conditions"] = cond
+                elif siminfo.IMPORT_ERROR:
+                    log("conditions: unavailable (" + siminfo.IMPORT_ERROR + ")")
+                else:
+                    log("conditions: shared memory unavailable")
         except Exception:
             log("conditions read failed:\n" + traceback.format_exc())
         try:
