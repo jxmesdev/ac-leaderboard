@@ -1,180 +1,52 @@
 === debug.log ===================================== 
 acMain: start
 git: syncing
-ok
+acMain: build ok
 git status -> syncing
 session: track=ks_brands_hatch cfg=indy car=ks_mazda_mx5_cup
 gitsync: cycle 1 start
-gitsync: data changed -> version 1
-sync: data changed, reloading board
 gitsync: cycle ok
 git status -> synced
 git: synced
+git status -> syncing
+git: syncing
+gitsync: cycle 1 start
+gitsync: cycle ok
+git status -> synced
+git: syncing
+git status -> syncing
+gitsync: cycle 1 start
+gitsync: cycle ok
+git: synced
+git status -> synced
+git status -> syncing
+gitsync: cycle 1 start
+gitsync: cycle ok
+git: synced
+git status -> synced
 pick fired: 1
 update: pick 1
-git status -> syncing
 git: syncing
+git status -> syncing
 gitsync: cycle 1 start
 gitsync: cycle ok
-git status -> synced
-git status -> syncing
-git: syncing
-gitsync: cycle 1 start
-gitsync: data changed -> version 2
-gitsync: cycle ok
-git status -> synced
 git: synced
-sync: data changed, reloading board
-git status -> syncing
-git: syncing
-gitsync: cycle 1 start
-gitsync: cycle ok
-git status -> synced
-git: synced
+ synced
+conditions: unavailable (No module named '_ctypes')
 git: syncing
 git status -> syncing
 gitsync: cycle 1 start
-gitsync: data changed -> version 3
-gitsync: cycle ok
-git status -> synced
-git: synced
-sync: data changed, reloading board
-git status -> syncing
-git: syncing
-gitsync: cycle 1 start
+gitsync: data changed -> version 1
 gitsync: cycle ok
 git: synced
  synced
 git status -> syncing
 git: syncing
-gitsync: cycle 1 start
-gitsync: data changed -> version 4
 sync: data changed, reloading board
-gitsync: cycle ok
-git: synced
-git status -> synced
-git: syncing
-syncing
 gitsync: cycle 1 start
 gitsync: cycle ok
 git status -> synced
 git: synced
-git: syncing
-git status -> syncing
-gitsync: cycle 1 start
-gitsync: cycle ok
-git status -> synced
-git status -> syncing
-git: syncing
-gitsync: cycle 1 start
-gitsync: data changed -> version 5
-gitsync: cycle ok
-git status -> synced
-sync: data changed, reloading board
-git status -> syncing
-git: syncing
-gitsync: cycle 1 start
-gitsync: cycle ok
-git status -> synced
-git: synced
-git status -> syncing
-git: syncing
-gitsync: cycle 1 start
-sync: data changed, reloading board
-gitsync: data changed -> version 6
-gitsync: cycle ok
-git: synced
- synced
-git: syncing
-git status -> syncing
-gitsync: cycle 1 start
-gitsync: cycle ok
-git: synced
-git status -> synced
-git: syncing
-git status -> syncing
-gitsync: cycle 1 start
-gitsync: data changed -> version 7
-gitsync: cycle ok
-git: synced
- synced
-sync: data changed, reloading board
-git status -> syncing
-git: syncing
-gitsync: cycle 1 start
-gitsync: cycle ok
-git status -> synced
-git: syncing
-git status -> syncing
-gitsync: cycle 1 start
-gitsync: data changed -> version 8
-gitsync: cycle ok
-git status -> synced
-git: synced
-sync: data changed, reloading board
-git status -> syncing
-git: syncing
-gitsync: cycle 1 start
-gitsync: cycle ok
-git status -> synced
-git: synced
-git: syncing
-git status -> syncing
-gitsync: cycle 1 start
-gitsync: cycle ok
-git: synced
-git status -> synced
-git status -> syncing
-git: syncing
-gitsync: cycle 1 start
-gitsync: cycle ok
-git: synced
- synced
-git status -> syncing
-git: syncing
-gitsync: cycle 1 start
-gitsync: data changed -> version 9
-gitsync: cycle ok
-git: synced
-git status -> synced
-sync: data changed, reloading board
-git status -> syncing
-git: syncing
-gitsync: cycle 1 start
-gitsync: cycle ok
-git status -> synced
-git: synced
-git: syncing
-git status -> syncing
-gitsync: cycle 1 start
-gitsync: data changed -> version 10
-gitsync: cycle ok
-git: synced
-git status -> synced
-sync: data changed, reloading board
-git: syncing
-git status -> syncing
-gitsync: cycle 1 start
-gitsync: cycle ok
-git: synced
-git status -> synced
-git: syncing
-syncing
-gitsync: cycle 1 start
-gitsync: cycle ok
-git status -> synced
-git: synced
-git: syncing
-syncing
-gitsync: cycle 1 start
-gitsync: cycle ok
-git: synced
- synced
-git status -> syncing
-git: syncing
-gitsync: cycle 1 start
-gitsync: cycle ok
-git status -> synced
  
 === current_setup.ini (live capture) ============== 
 [ABS]
@@ -293,19 +165,13 @@ VERSION=0.2.11
  M debug_report_DAZSPC.txt
  
 === AC log.txt tail (python import errors land here) 
+Loading lut content/cars/ks_mazda_mx5_cup/data/wing_rear_AOA_CL.lut
+Loading lut content/cars/ks_mazda_mx5_cup/data/wing_rear_AOA_CD.lut
 Loading engine file content/cars/ks_mazda_mx5_cup/data/engine.ini
-VERSION=1
-GENERATING COAST CURVE PARAMETERS for section COAST_REF
-0: 11.661130
-3000: -33.189369
-6500: -85.514954
-LOADING THROTTLE LUT
-ADDING GEAR:R
-ADDING GEAR:1
-ADDING GEAR:4
 RaceEngineer :: LOADING IDEAL LINE
 Loading AI Spline: content/tracks/ks_brands_hatch/indy/data/ideal_line.ai
 MAX NUMBER OF GEARS 8
+MAX SPEED 209.286575 MIN_SPEED 1.000000
 MAX SPEED 66.061455 TURBOS 0
 FINAL FUEL : 0.752425
 POWER CLASS INDEX: 108.116394 (ks_mazda_mx5_cup) PW:108678.601562 (145.740173 HP) W:1005.200012
@@ -317,23 +183,25 @@ ERROR: DAMPER CREATION FAILED
 lpDirectInputDevice->CreateEffect successful GUID_ConstantForce
 ff_post_process.ini
 Overriding assettocorsa.ini FF_SKIP_STEPS with controls.ini value: 0
-[ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
 [CLUTCH] JOY: 1
 [HANDBRAKE] JOY: 0
+[SHIFTER] ACTIVE: 0
+[GLANCELEFT] BUTTON: -1
+[ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
+[GLANCERIGHT] KEY: 69
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
+[ACTION_CHANGE_CAMERA] KEY: -1
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
-[ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
-[ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
+[ACTION_HEADLIGHTS] KEY: 76
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
 [ACTION_HEADLIGHTS_FLASH] KEY: 71
-[ACTION_HORN] JOY: -1
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
-[BALANCEUP] KEY: -1
+[BALANCEDN] KEY: -1
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
-[KERS] KEY: -1
+[ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
 [BRAKES] GAMMA: 2.400000
 [ABSDN] BUTTON: -1
@@ -343,26 +211,24 @@ Overriding assettocorsa.ini FF_SKIP_STEPS with controls.ini value: 0
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
 [TURBODN] KEY: -1
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
-[TURBOUP] KEY: -1
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
 [ENGINE_BRAKE_UP] KEY: -1
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
+[ENGINE_BRAKE_DN] KEY: -1
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
 [MGUK_DELIVERY_UP] KEY: -1
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
-[MGUK_DELIVERY_DN] KEY: -1
-[ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
-[MGUK_RECOVERY_UP] KEY: -1
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
 [ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
+[ADVANCED] COMBINE_WITH_KEYBOARD_CONTROL: 0
+[MGUH_MODE] KEY: -1
 [STEER] STEER_FILTER: 0.000000
 [STEER] SCALE: 1.000000
 [STEER] SPEED_SENSITIVITY: 0.000000
 [FF_ENHANCEMENT] ROAD: 0.500000
-[FF_ENHANCEMENT] ABS: 0.210000
-[FF_TWEAKS] CENTER_BOOST_GAIN: 0.000000
 LOADING COLLIDER MESH FILE: content/cars/ks_mazda_mx5_cup/collider.kn5
 Car bounds L: 3.928102 W:1.919355 , front: 1.840579 rear: 2.087523
+DEBUG TIMER: Car::initColliderMesh:0.100700
 RADIUS FRONT, P:0.305000 , G:0.000000 , diff:0.305000
 SMOKE LEVEL AT 0:SMOKE LEVEL AT 0:SMOKE LEVEL AT 0:SMOKE LEVEL AT 0:ENGINE SMOKE LEVEL SELECTED : eSmokeOff
 Audio log (AudioEngine.cpp:1198): Loading bank content/cars/ks_mazda_mx5_cup/sfx/ks_mazda_mx5_cup.bank
@@ -416,11 +282,9 @@ FOUND 0 BRAKE DISCS MESHES FOR TYRE:1
 FOUND 0 BRAKE DISCS MESHES FOR TYRE:2
 FOUND 0 BRAKE DISCS MESHES FOR TYRE:3
 User FF gain loaded and set to 0.990000
-DEBUG TIMER: PHYSICS LOAD:428.912100
 goToSpawnPosition PIT
 [CAR_0] BALLAST: 0.000000
 [GHOST_CAR] RECORDING: 0
-[RACE] PENALTIES: 1
 [RACE] JUMP_START_PENALTY: 0
 New session, resetting track dynamic objects
 
@@ -448,19 +312,14 @@ TEST MAX, LOAD:3045.0 1.00 @ 7.52 D:1.46
 TEST MAX, LOAD:6090.0 1.00 @ 7.63 D:1.19
 TEST MAX, LOAD:12180.0 1.00 @ 7.91 D:0.98
 COOL FACTOR FINAL:0.000162
-Loading lut content/cars/ks_mazda_mx5_cup/data/tcurve_slicksGT3h.lut
 Loading lut content/cars/ks_mazda_mx5_cup/data/slicksGT3h_front.lut
 MAX WEAR AT: 36.000000 vKM , mult 0.880000
 SOFTNESS INDEX: 0.466331
-cback: 0
 LOADING TYRE COMPOUND Slicks (H)
 TEST MAX, LOAD:1522.5 1.00 @ 7.46 D:1.79
-TEST MAX, LOAD:3045.0 1.00 @ 7.52 D:1.46
-TEST MAX, LOAD:12180.0 1.00 @ 7.91 D:0.98
 COOL FACTOR FINAL:0.000162
 Loading lut content/cars/ks_mazda_mx5_cup/data/slicksGT3h_front.lut
-MAX WEAR AT: 36.000000 vKM , mult 0.880000
-cback: 0
+SOFTNESS INDEX: 0.466331
 LOADING TYRE COMPOUND Slicks (H)
 TEST MAX, LOAD:1522.5 1.00 @ 7.46 D:1.79
 TEST MAX, LOAD:3045.0 1.00 @ 7.52 D:1.46
@@ -478,13 +337,14 @@ TEST MAX, LOAD:12180.0 1.00 @ 7.91 D:0.98
 COOL FACTOR FINAL:0.000162
 Loading lut content/cars/ks_mazda_mx5_cup/data/slicksGT3h_front.lut
 MAX WEAR AT: 36.000000 vKM , mult 0.880000
-cback: 0
 Initialising Python Interface
 Cleaning Python Cache in path apps/python/system/
 LOADING 4 PY APPS
 ERROR: Python [ERROR] File apps/python/acnotify/acnotify.py not found
 Cleaning Python Cache in path apps/python/ac_leaderboard/
-ERROR: Python ERROR LOADING MODULE :sys.path.append('apps/python/ac_leaderboard')
+Init PyPlugin:ac_leaderboard
+WARNING: TaskBarIcon :: COULD NOT FIND TEXTURES FOR Bradford Leaderboard_ICON
+Function acUpdate bind to module
 Cleaning Python Cache in path apps/python/Chat/
 Init PyPlugin:Chat
 WARNING: TaskBarIcon :: COULD NOT FIND TEXTURES FOR Python Chat_ICON
@@ -499,6 +359,12 @@ Localized TYRES is TYRES
 Localized FUEL is FUEL
 Localized ELECTRONICS is NOT FOUND
 Loading pitstop.ini
+[SETTINGS] SIZE_MULT: 1.200000
+[SETTINGS] AUTO_APP_ON_PITLANE: 1
+[SETTINGS] HEADER_HEIGHT: 16.000000
+[SETTINGS] VISIBILITY_MAX_TIME: 5.000000
+[SETTINGS] OBJECT_POS_Y: 0.000000
+[SETTINGS] ITEM_TITLE_WIDTH: 130.000000
 [SETTINGS] FORM_ALIGNMENT_H: 2
 [SETTINGS] FONT_IS_BOLD: 0
 Loading setup.ini
@@ -542,14 +408,16 @@ RESET PHYSICS TIMER
 DInput input lost:
 ACQUIRED OK, REQUEST FF RESTART
 PhysicsAvatar:: SESSION INFO RECEIVED
+First session, resetting dynamic track grip: 1.000000
 Car::setRequestedFuel: 30.000000
 Changing Car:0  tyre:1  compoundindex:0
+Changing Car:0  tyre:3  compoundindex:0
 Car::setRequestedFuel: 30.000000
 Changing Car:0  tyre:0  compoundindex:0
-Changing Car:0  tyre:3  compoundindex:0
+Changing Car:0  tyre:2  compoundindex:0
 Setup change for Car: ks_mazda_mx5_cup [0] Changing: ROD_LENGTH_LF from 0.025000 to 0.025000
-DEBUG TIMER: Sim::Sim:2847.436400
-TIME TO INIT: 3033.392100
+DEBUG TIMER: Sim::Sim:3124.705700
+TIME TO INIT: 3328.597700
 SplashScreen removed from evOnEndFrame that has 0 listeners
 Requested set is the same already in use, no actions
 ERROR: NO STAT FOR ks_mazda_mx5_cup
@@ -558,38 +426,42 @@ Audio log (AudioEngine.cpp:1198): Loading bank C:\Program Files (x86)\Steam\stea
 WARNING: TaskBarIcon :: COULD NOT FIND TEXTURES FOR IMGUI_CSP_LUA_App Shelf_main_ICON
 WARNING: TaskBarIcon :: COULD NOT FIND TEXTURES FOR IMGUI_CSP_LUA_CSP Debug_main_ICON
 WARNING: TaskBarIcon :: COULD NOT FIND TEXTURES FOR IMGUI_CSP_LUA_CSP Debug_settings_ICON
-FINALIZING STATIC PARTICLE SYSTEM, particles.size()=10 stagingBufferSize=600
-FINALIZING STATIC PARTICLE SYSTEM, particles.size()=5 stagingBufferSize=450
+FINALIZING STATIC PARTICLE SYSTEM, particles.size()=6 stagingBufferSize=600
+FINALIZING STATIC PARTICLE SYSTEM, particles.size()=6 stagingBufferSize=450
 FINALIZING STATIC PARTICLE SYSTEM, particles.size()=4 stagingBufferSize=450
-FINALIZING STATIC PARTICLE SYSTEM, particles.size()=3 stagingBufferSize=250
+FINALIZING STATIC PARTICLE SYSTEM, particles.size()=2 stagingBufferSize=250
 FINALIZING STATIC PARTICLE SYSTEM, particles.size()=0 stagingBufferSize=70
 FINALIZING STATIC PARTICLE SYSTEM, particles.size()=1 stagingBufferSize=100
-FINALIZING STATIC PARTICLE SYSTEM, particles.size()=4 stagingBufferSize=600
-FINALIZING STATIC PARTICLE SYSTEM, particles.size()=6 stagingBufferSize=300
+FINALIZING STATIC PARTICLE SYSTEM, particles.size()=11 stagingBufferSize=600
+FINALIZING STATIC PARTICLE SYSTEM, particles.size()=2 stagingBufferSize=300
 Car::setRequestedFuel: 30.000000
-LAP VALID: 1 CUTS:1, COUNT: 1
+LAP VALID: 1 CUTS:0, COUNT: 1
 LAP VALID: 1 CUTS:0, COUNT: 2
 LAP VALID: 1 CUTS:0, COUNT: 3
+LAP VALID: 1 CUTS:0, COUNT: 4
 SETTING PAUSE MODE: 1
-Saving replay: C:\Users\dazbr\Documents/Assetto Corsa/replay/temp/AC_240726-191112_O_ks_mazda_mx5_cup_ks_brands_hatch_indy.acreplay
+Saving replay: C:\Users\dazbr\Documents/Assetto Corsa/replay/temp/AC_240726-192105_O_ks_mazda_mx5_cup_ks_brands_hatch_indy.acreplay
 closing pluginManager
-DELETING PY PLUGIN Chat
-km_per_liter: 3.455030 lap_eval: 0.554492  , evaluator: 0.561866 (guess: 0.814164), length:1915.786011
-Saving telemetry channel LAP_BEACON with 28635 samples @ 100
-Saving telemetry channel G_LAT with 5727 samples @ 20
-Saving telemetry channel STEERANGLE with 5727 samples @ 20
-Saving telemetry channel SPEED with 5727 samples @ 20
-Saving telemetry channel THROTTLE with 5727 samples @ 20
-Saving telemetry channel BRAKE with 5727 samples @ 20
-Saving telemetry channel GEAR with 5727 samples @ 20
-Saving telemetry channel G_LON with 5727 samples @ 20
-Saving telemetry channel CLUTCH with 5727 samples @ 20
-Saving telemetry channel RPMS with 5727 samples @ 20
-Saving telemetry channel SPLINE_POSITION with 5727 samples @ 20
-Saving telemetry channel SUS_TRAVEL_LF with 57269 samples @ 200
-Saving telemetry channel SUS_TRAVEL_RF with 57269 samples @ 200
-Saving telemetry channel SUS_TRAVEL_LR with 57269 samples @ 200
-Saving telemetry channel SUS_TRAVEL_RR with 57269 samples @ 200
-Saving telemetry channel WHEEL_SPEED_LF with 5727 samples @ 20
-Saving telemetry channel WHEEL_SPEED_RR with 5727 samples @ 20
+DELETING PY PLUGIN ac_leaderboard
+km_per_liter: 2.983798 lap_eval: 0.642063  , evaluator: 0.570257 (guess: 0.814164), length:1915.786011
+Saving telemetry channel LAP_BEACON with 30871 samples @ 100
+Saving telemetry channel G_LAT with 6175 samples @ 20
+Saving telemetry channel ROTY with 6175 samples @ 20
+Saving telemetry channel STEERANGLE with 6175 samples @ 20
+Saving telemetry channel SPEED with 6175 samples @ 20
+Saving telemetry channel THROTTLE with 6175 samples @ 20
+Saving telemetry channel BRAKE with 6175 samples @ 20
+Saving telemetry channel GEAR with 6175 samples @ 20
+Saving telemetry channel G_LON with 6175 samples @ 20
+Saving telemetry channel CLUTCH with 6175 samples @ 20
+Saving telemetry channel RPMS with 6175 samples @ 20
+Saving telemetry channel SPLINE_POSITION with 6175 samples @ 20
+Saving telemetry channel SUS_TRAVEL_LF with 61742 samples @ 200
+Saving telemetry channel SUS_TRAVEL_RF with 61742 samples @ 200
+Saving telemetry channel SUS_TRAVEL_LR with 61742 samples @ 200
+Saving telemetry channel SUS_TRAVEL_RR with 61742 samples @ 200
+Saving telemetry channel WHEEL_SPEED_LF with 6175 samples @ 20
+Saving telemetry channel WHEEL_SPEED_RF with 6175 samples @ 20
+Saving telemetry channel WHEEL_SPEED_LR with 6175 samples @ 20
+Saving telemetry channel WHEEL_SPEED_RR with 6175 samples @ 20
 CLEAN EXIT
