@@ -35,10 +35,10 @@
   a.brand:hover { text-decoration:none; }
   #primsel { -webkit-appearance:none; appearance:none; background:var(--panel2);
     color:var(--text); border:1px solid var(--line); border-radius:0;
-    padding:3px 26px 3px 10px; cursor:pointer;
-    font:600 12px "Chakra Petch",sans-serif; letter-spacing:.5px;
+    padding:5px 30px 5px 12px; cursor:pointer;
+    font:600 14px "Chakra Petch",sans-serif; letter-spacing:.5px;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpolyline points='1,1.2 5,4.8 9,1.2' fill='none' stroke='%238b9384' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat:no-repeat; background-position:right 8px center; background-size:9px 6px; }
+    background-repeat:no-repeat; background-position:right 10px center; background-size:10px 7px; }
   #primsel:focus { outline:none; border-color:var(--accent); }
   .back { display:inline-block; margin:-16px 0 14px; font:600 11px "Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:1.2px; }
@@ -425,7 +425,7 @@
     // label + styled dropdown of every lap; changing it switches primary
     var sub = document.getElementById("subtitle");
     sub.innerHTML = "<b style='color:var(--text)'>Primary Lap:</b>";
-    sub.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:30px";
+    sub.style.cssText = "display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:30px;font-size:15px";
     var sel = document.createElement("select"); sel.id = "primsel";
     laps.forEach(function(l, i){
       var o = document.createElement("option");
