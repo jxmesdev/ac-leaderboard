@@ -124,5 +124,18 @@
     "time_ms": 59142, 
     "track": "ks_vallelunga", 
     "user": "James"
+  }, 
+  {
+    "car": "ks_mazda_mx5_cup", 
+    "config": "indy", 
+    "date": "2026-07-24T16:48:59Z", 
+    "source": "auto", 
+    "splits": [
+      92273, 
+      25264
+    ], 
+    "time_ms": 117537, 
+    "track": "ks_brands_hatch", 
+    "user": "Daren"
   }
 ]
