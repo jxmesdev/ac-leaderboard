@@ -490,9 +490,15 @@ class LeaderboardApp(object):
         Track assets (map/edges) are queued as outbox assets here too.
         """
         if not self.record_telemetry:
+            log("telemetry: disabled by config (record_telemetry)")
             return None
         lap = self.recorder.take_last_lap()
         if not lap:
+            # cur samples: 0 = the recorder was never fed (nsp unavailable
+            # or never 'moving'); large = fed but the line-crossing wrap
+            # was never seen. Either way this lap publishes without traces.
+            log("telemetry: no finished lap in recorder (cur samples={0})"
+                .format(len(self.recorder._cur["nsp"])))
             return None
         track, cfg, car = rec["track"], rec["config"], rec["car"]
         try:
@@ -837,6 +843,9 @@ class LeaderboardApp(object):
             self.track, self.track_config, self.car = track, cfg, car
             self._lap_count = None
             self._lap_invalid = False
+            # a FLICKERING combo (repeated lines here) would reset the
+            # recorder mid-lap and telemetry would never survive to a lap
+            log("session: track={0} cfg={1} car={2}".format(track, cfg, car))
             self.recorder.reset()
             self._set(self.l_track, "Track: " + self._combo_name(track, cfg))
             self._set(self.l_car, "Car: " + (car or "-"))

@@ -81,6 +81,11 @@
   .laps { padding:6px 6px 10px; max-height:460px; overflow-y:auto; }
   .lap { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:6px; cursor:pointer; }
   .lap:hover { background:var(--panel2); }
+  .lap.nodata { opacity:.45; cursor:default; }
+  .lap.nodata:hover { background:none; }
+  .ndtag { font:600 9px "Chakra Petch",sans-serif; text-transform:uppercase;
+    letter-spacing:.5px; color:var(--muted); border:1px solid var(--line);
+    padding:1px 5px; }
   .lap input { margin:0; accent-color:var(--accent); }
   .swatch { width:12px; height:12px; border-radius:3px; flex:0 0 auto; }
   input.swatch { -webkit-appearance:none; appearance:none; width:16px; height:16px;
@@ -279,6 +284,7 @@
   var traceFocus = null; // {i, d0, d1} sector focus of the TRACES x-domain
                          // (i === -2 for a drag-selected custom range)
   var traceSel = null;   // {d0, d1} shaded band while drag-selecting
+  var noData = [];       // combo records WITHOUT telemetry (listed greyed)
   var mapFitPending = false;   // drawMap should recompute cam for the focus
   var camAnim = null;          // {from, to, t0} camera fly-to animation
   var camCustom = false;       // user panned/zoomed away: no sector chip active
@@ -307,19 +313,23 @@
 
   getJSON("data/records.json", "no-store").then(function(records){
     if(!Array.isArray(records)) records=[];
-    var roster = records.filter(comboMatch).filter(function(r){return r.telemetry;});
-    roster.sort(function(a,b){ return (a.time_ms||1e12)-(b.time_ms||1e12); });
+    // Trophies rank each driver's laps across the WHOLE combo (matching
+    // the leaderboard), then the roster splits: laps with telemetry are
+    // interactive; the rest still LIST (greyed) so every driver appears.
+    var combo = records.filter(comboMatch);
+    combo.sort(function(a,b){ return (a.time_ms||1e12)-(b.time_ms||1e12); });
+    var perDriver = {};
+    combo.forEach(function(r){
+      var k=norm(r.user), c=perDriver[k]||0; perDriver[k]=c+1;
+      r._trophy = ["🥇","🥈","🥉"][c] || "";
+    });
+    var roster = combo.filter(function(r){return r.telemetry;});
+    noData = combo.filter(function(r){return !r.telemetry;});
     if(!roster.length){ fail("No telemetry found for this track & car combination."); return; }
 
     laps = roster.map(function(r){
-      return {rec:r, color:PALETTE[0], shown:false, data:null, loading:false};
-    });
-    // trophies: within the combo, each driver's own laps ranked by time
-    // (roster is time-sorted, so per-driver encounter order == their rank)
-    var perDriver = {};
-    laps.forEach(function(l){
-      var k=norm(l.rec.user), c=perDriver[k]||0; perDriver[k]=c+1;
-      l.trophy = ["🥇","🥈","🥉"][c] || "";
+      return {rec:r, color:PALETTE[0], shown:false, data:null, loading:false,
+              trophy:r._trophy};
     });
     // primary: exact ?ms lap of driver d -> driver d's fastest -> fastest overall
     var mine = laps.filter(function(l){ return norm(l.rec.user)===want.driver; });
@@ -467,6 +477,19 @@
       var tm=document.createElement("span"); tm.className="tm"; tm.textContent=fmtTime(l.rec.time_ms);
       row.appendChild(cb); row.appendChild(sw); row.appendChild(nm); row.appendChild(tm);
       l._sw = sw; l._cb = cb;
+      box.appendChild(row);
+    });
+    // laps recorded without telemetry (e.g. a rig with recording off):
+    // listed so the driver is visible, but nothing to overlay
+    noData.forEach(function(r){
+      var row=document.createElement("div"); row.className="lap nodata";
+      var nm=document.createElement("span"); nm.className="nm";
+      nm.textContent=(r._trophy? r._trophy+" ":"")+r.user;
+      var tag=document.createElement("span"); tag.className="ndtag";
+      tag.textContent="no telemetry";
+      var tm=document.createElement("span"); tm.className="tm";
+      tm.textContent=fmtTime(r.time_ms);
+      row.appendChild(nm); row.appendChild(tag); row.appendChild(tm);
       box.appendChild(row);
     });
   }
