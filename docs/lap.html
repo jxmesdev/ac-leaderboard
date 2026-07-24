@@ -129,6 +129,12 @@
   .card.anim { transition:height .25s ease; overflow:hidden; }
   .sectors { margin-top:16px; }
   .secbody { padding:10px 14px 12px; overflow-x:auto; }
+  .optlap { margin-top:10px; padding-top:10px; border-top:1px solid var(--line);
+    color:var(--muted); font-size:12px;
+    display:flex; align-items:center; line-height:1; }
+  .optlap b { color:var(--accent); font-weight:600; margin-left:8px;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace; }
+  .optlap .optsep { margin:0 8px; }
   .secbtns { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
   #tracesec { margin:10px 14px 14px; }
   .secbtns button { background:var(--panel2); color:var(--text); border:1px solid var(--line);
@@ -1325,6 +1331,27 @@
     var tbl=document.createElement("table"); tbl.className="sectable";
     tbl.innerHTML=html+"</tbody>";
     body.appendChild(tbl);
+    // Optimal lap: best of each sector across the laps currently shown
+    var bests=[], complete=true;
+    for(var bi=0; bi<ps.length; bi++){
+      var best=null;
+      sl.forEach(function(l){
+        var sp=splitsOf(l);
+        if(sp && bi<sp.length && sp[bi]!=null && (best==null || sp[bi]<best)) best=sp[bi];
+      });
+      if(best==null){ complete=false; break; }
+      bests.push(best);
+    }
+    if(complete && bests.length){
+      var tot=0; bests.forEach(function(v){ tot+=v; });
+      var opt=document.createElement("div"); opt.className="optlap";
+      var oh="Optimal Lap:<b>"+fmtTime(tot)+"</b>";
+      bests.forEach(function(v, oi){
+        oh+="<span class='optsep'>·</span>S"+(oi+1)+": "+fmtSec(v);
+      });
+      opt.innerHTML=oh;
+      body.appendChild(opt);
+    }
   }
 
   function deltaSeries(l){
