@@ -82,5 +82,19 @@
     "time_ms": 52840, 
     "track": "ks_brands_hatch", 
     "user": "Test"
+  }, 
+  {
+    "car": "ks_nissan_370z", 
+    "config": "club_circuit", 
+    "date": "2026-07-24T00:49:27Z", 
+    "source": "auto", 
+    "splits": [
+      24929, 
+      36986
+    ], 
+    "telemetry": "telemetry/ks_vallelunga__club_circuit__ks_nissan_370z__james__61915.json", 
+    "time_ms": 61915, 
+    "track": "ks_vallelunga", 
+    "user": "James"
   }
 ]
