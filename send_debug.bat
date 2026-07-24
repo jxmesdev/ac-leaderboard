@@ -1,16 +1,27 @@
 @echo off
 rem One-click: snapshot the app's debug log (and live-setup capture state)
 rem and push it to GitHub so it can be read remotely. Run from the app folder.
+rem The filename is per-PC so two rigs never fight over the same file.
 cd /d "%~dp0"
-echo === debug.log ===================================== > debug_report.txt
-type debug.log >> debug_report.txt 2>nul
-echo. >> debug_report.txt
-echo === current_setup.ini (live capture) ============== >> debug_report.txt
-type current_setup.ini >> debug_report.txt 2>nul
-git add debug_report.txt
-git commit -m "debug report from rig"
+set REPORT=debug_report_%COMPUTERNAME%.txt
+echo === debug.log ===================================== > %REPORT%
+type debug.log >> %REPORT% 2>nul
+echo. >> %REPORT%
+echo === current_setup.ini (live capture) ============== >> %REPORT%
+type current_setup.ini >> %REPORT% 2>nul
+git add %REPORT%
+git commit -m "debug report from %COMPUTERNAME%"
 git pull --rebase
+if errorlevel 1 (
+    echo Pull hit a conflict -- undoing so the app is not left stuck.
+    git rebase --abort
+)
 git push
-echo.
-echo Debug report pushed. You can close this window.
+if errorlevel 1 (
+    echo.
+    echo PUSH FAILED -- the report is saved locally; try again later.
+) else (
+    echo.
+    echo Debug report pushed. You can close this window.
+)
 pause

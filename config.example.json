@@ -4,9 +4,14 @@
   "git_remote": "origin",
   "git_branch": "main",
   "git_exe": "git",
-  "author_name": "AC Leaderboard",
-  "author_email": "ac-leaderboard@local",
+  "author_name": "My rig",
+  "author_email": "me@rig.local",
   "auto_push": true,
-  "auto_capture": true,
-  "leaderboard_rows": 10
+  "sync_interval_s": 60,
+  "leaderboard_rows": 10,
+  "record_telemetry": true,
+  "telemetry_hz": 30,
+  "ac_root": "",
+  "setups_dir": "",
+  "web_url": "https://jxmesdev.github.io/ac-leaderboard/"
 }

@@ -52,6 +52,22 @@ def driver_button_texts():
             if mock_ac.STATE.widgets[b]["text"].strip()]
 
 
+def wait_synced(timeout=30.0):
+    """Block until the async sync worker drains the outbox and pushes.
+
+    The main thread never writes docs/data any more -- the worker replays
+    the outbox onto the remote's state -- so file assertions must wait.
+    """
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        w = app._app.git._worker
+        if (w is None or not w.is_alive()) and not app._app.git._requested:
+            if app._app.git.last_status.startswith("synced"):
+                return
+        time.sleep(0.05)
+    raise AssertionError("sync did not finish: " + app._app.git.last_status)
+
+
 print("== acMain ==")
 app.acMain(1.0)
 
@@ -152,6 +168,7 @@ mock_ac.STATE.last_lap = 81200
 mock_ac.STATE.splits = [27000, 27100, 27100]     # sums to 81200
 for _ in range(40):
     app.acUpdate(1 / 60.0)
+wait_synced()
 dump("after driven PB 1:21.200")
 # (the async git worker may have already overwritten the status with "git: ...")
 assert app._app.status_text == "PB for James: 1:21.200" or \
@@ -192,6 +209,7 @@ mock_ac.STATE.last_lap = 82500
 mock_ac.STATE.splits = [27500, 27400, 27600]     # sums to 82500
 for _ in range(40):
     app.acUpdate(1 / 60.0)
+wait_synced()
 dump("after slower lap 1:22.500 (top-3)")
 assert app._app.status_text == "top-3 lap for James: 1:22.500" or \
     app._app.status_text.startswith("git:"), app._app.status_text
@@ -210,10 +228,12 @@ assert json.load(open(tel_path2)).get("splits") == [27500, 27400, 27600]
 print("second (top-3) lap stored with its own telemetry + splits")
 
 # Let the background git worker finish.
-time.sleep(3)
+wait_synced()
 print("git status:", app._app.git.last_status)
+assert app._app.outbox.count() == 0, "outbox must drain after sync"
 
 app.acShutdown()
+wait_synced()          # shutdown kicks a last best-effort sync
 
 from acl_core.leaderboard import leaderboard_for
 from acl_core import storage

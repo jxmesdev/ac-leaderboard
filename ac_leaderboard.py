@@ -22,6 +22,7 @@ import ac  # provided by Assetto Corsa
 
 from acl_core import ac_data, ailine, config, luainstall, setups, storage, telemetry, trackmap
 from acl_core.git_sync import GitSync
+from acl_core.outbox import Outbox
 from acl_core.leaderboard import leaderboard_for
 from acl_core.timefmt import format_ms
 
@@ -182,9 +183,24 @@ class LeaderboardApp(object):
     def __init__(self):
         self.window = None
         self.cfg = config.load(APP_DIR)
-        self.store = storage.Store(self.cfg.data_dir).load()
+        # Status fields exist BEFORE the sync worker can call back into
+        # _on_git_status from its thread.
+        self.status_text = ""
+        self.status_error = False
+        self._status_at = -1e9         # session time of the last app status
+        self._session_t = 0.0
+        self._git_status = ""
+        # All data changes queue in the outbox; the sync worker replays them
+        # onto the remote's state. The MAIN THREAD NEVER WRITES docs/data --
+        # it reads the worker's atomic view snapshot instead.
+        self.outbox = Outbox(os.path.join(APP_DIR, "_localdata"))
+        self._view_dir = os.path.join(APP_DIR, "_localdata", "view")
+        self.store = self._merged_store()
         self.git = GitSync(
             self.cfg.repo_path,
+            self.cfg.get("data_subdir"),
+            self.outbox,
+            view_dir=self._view_dir,
             branch=self.cfg.get("git_branch"),
             remote=self.cfg.get("git_remote"),
             author_name=self.cfg.get("author_name"),
@@ -194,6 +210,18 @@ class LeaderboardApp(object):
             logger=dbg,   # file-only logger: safe to call from the git thread
         )
         self._last_git_log = ""
+        self._seen_data_version = 0
+        self._sync_timer = 0.0
+        try:
+            self._sync_interval = max(15.0,
+                                      float(self.cfg.get("sync_interval_s")))
+        except (TypeError, ValueError):
+            self._sync_interval = 60.0
+        # staging area for track assets grabbed from the AC install; they are
+        # queued as outbox assets, never written into docs/data directly
+        self._stage_dir = os.path.join(APP_DIR, "_localdata", "grab")
+        # startup pull: see the other rig's laps from the previous session
+        self._sync()
 
         # session state
         self.track = ""
@@ -206,8 +234,6 @@ class LeaderboardApp(object):
         # driver's OWN record (never AC's shared session best).
         self._lap_count = None         # None until the first slow tick baselines it
         self._lap_invalid = False
-        self.status_text = ""
-        self.status_error = False
         self._accum = 0.0
         # True only while the car is moving. Checked at the slow cadence so that
         # while parked/typing there are ZERO per-frame ac.* reads (which crash
@@ -427,9 +453,9 @@ class LeaderboardApp(object):
         self.selected = name
         self._render_driver_grid()
         self._refresh_board()
-        self.store.save()
+        self.outbox.add_user(name)
         self._set_status("added driver: " + name)
-        self._publish("Add driver " + name)
+        self._sync()
         log("add_driver: done")
 
     # -- recording --------------------------------------------------------
@@ -445,51 +471,30 @@ class LeaderboardApp(object):
             self._set_status("{0}: {1} not in your top 3".format(user, format_ms(ms)))
             return
         # Both "pb" and "top3" laps keep their telemetry: every stored lap
-        # has its own file (the filename carries the lap time).
-        extra = self._save_telemetry(rec, splits)
-        dropped_tel = self._remove_dropped_telemetry(dropped)
-        if dropped_tel:
-            # git add of a deleted path stages the deletion.
-            extra = extra + [dropped_tel]
-        self.store.save()
+        # has its own file (the filename carries the lap time). The payload
+        # is staged in the outbox; the sync worker writes the repo files
+        # (and prunes the dropped lap's file) against the remote's state.
+        payload_text = self._build_telemetry(rec, splits)
+        self.outbox.add_lap(rec, payload_text)
         self._refresh_board()
         if result == "pb":
             self._set_status("PB for {0}: {1}".format(user, format_ms(ms)))
         else:
             self._set_status("top-3 lap for {0}: {1}".format(user, format_ms(ms)))
-        self._publish("{0} {1} {2} {3}".format(user, track, car, format_ms(ms)),
-                      extra_paths=extra)
+        self._sync()
 
-    def _remove_dropped_telemetry(self, dropped):
-        """Delete the telemetry file of a record that fell out of the top 3.
+    def _build_telemetry(self, rec, splits=None):
+        """Build the lap's telemetry payload and link it to its record.
 
-        Returns its absolute path (to stage the deletion in the push), or None.
-        """
-        if not dropped:
-            return None
-        rel = dropped.get("telemetry")
-        if not rel:
-            return None
-        path = os.path.join(self.cfg.data_dir, rel)
-        try:
-            if os.path.isfile(path):
-                os.remove(path)
-        except Exception:
-            log("dropped telemetry remove failed: " + path)
-        return path
-
-    def _save_telemetry(self, rec, splits=None):
-        """Write the just-stored lap's telemetry and link it to its record.
-
-        Returns a list of extra file paths to include in the git push.
+        Sets rec["telemetry"] and returns the payload JSON text (or None).
+        Track assets (map/edges) are queued as outbox assets here too.
         """
         if not self.record_telemetry:
-            return []
+            return None
         lap = self.recorder.take_last_lap()
         if not lap:
-            return []
+            return None
         track, cfg, car = rec["track"], rec["config"], rec["car"]
-        extra = []
         try:
             payload = telemetry.build_payload(lap, track, cfg, car,
                                               rec["user"], rec["time_ms"],
@@ -499,17 +504,20 @@ class LeaderboardApp(object):
             tm = self._grab_trackmap(track, cfg)
             if tm is not None:
                 payload["trackmap"] = tm[0]
-                extra.append(tm[1])
+                self.outbox.add_asset(tm[0], tm[1])
             # Reference the published edges file; only (re)build it if it is
             # missing or predates the current algorithm -- never on every PB.
+            # A copy already queued in the outbox counts as published (the
+            # rebuild parses the whole AI spline -- too heavy to repeat per
+            # lap while a sync is still in flight).
             rel, path, ver = self._edges_state(track, cfg)
-            if ver >= ailine.EDGES_VER:
+            if ver >= ailine.EDGES_VER or self.outbox.has_asset(rel):
                 payload["edges_url"] = rel
             else:
                 eg = self._grab_edges(track, cfg)
                 if eg is not None:
                     payload["edges_url"] = eg[0]
-                    extra.append(eg[1])
+                    self.outbox.add_asset(eg[0], eg[1])
             su = self._grab_setup(car, track)
             if su is not None:
                 name = su.get("name") or \
@@ -518,15 +526,16 @@ class LeaderboardApp(object):
                 payload["setup"] = {"name": name, "ini": su["ini"],
                                     "folder": su["folder"],
                                     "src": su.get("src") or "latest_saved"}
-            relpath = telemetry.write_telemetry(self.cfg.data_dir, payload)
         except Exception:
-            log("telemetry write failed:\n" + traceback.format_exc())
-            return []
+            log("telemetry build failed:\n" + traceback.format_exc())
+            return None
         # `rec` is the dict the store keeps (upsert appends it as-is), so
         # linking here updates the stored record directly -- never a lookup,
         # which could hit one of the driver's OTHER laps now.
-        rec["telemetry"] = relpath
-        return [os.path.join(self.cfg.data_dir, relpath)] + extra
+        fname = telemetry.telemetry_filename(track, cfg, car, rec["user"],
+                                             rec["time_ms"])
+        rec["telemetry"] = "telemetry/" + fname
+        return json.dumps(payload, separators=(",", ":")) + "\n"
 
     def _edges_state(self, track, cfg):
         """(rel_url, abs_path, stored_ver) for this track's edges file.
@@ -551,9 +560,9 @@ class LeaderboardApp(object):
         edge-building algorithm (ver < ailine.EDGES_VER)."""
         if not (self.track and self.cfg.repo_configured()):
             return
-        paths = []
+        queued = False
         rel, path, ver = self._edges_state(self.track, self.track_config)
-        if ver < ailine.EDGES_VER:
+        if ver < ailine.EDGES_VER and not self.outbox.has_asset(rel):
             if ver:
                 log("edges: stored ver {0} < {1}, regenerating".format(
                     ver, ailine.EDGES_VER))
@@ -561,25 +570,29 @@ class LeaderboardApp(object):
             if eg is None:
                 log("edges: no usable fast_lane.ai for " + self.track)
             else:
-                log("edges: published " + eg[0])
-                paths.append(eg[1])
+                log("edges: queued " + eg[0])
+                self.outbox.add_asset(eg[0], eg[1])
+                queued = True
         # Corner names/numbers straight from the track's data/sections.ini
         # (AC's own data). Published once; tracks without the file just skip.
         sname = telemetry.slug(self.track) + "__" + \
             telemetry.slug(self.track_config) + "__sections.json"
-        if not os.path.isfile(os.path.join(self.cfg.data_dir, "trackmaps", sname)):
+        if not os.path.isfile(os.path.join(self.cfg.data_dir, "trackmaps",
+                                           sname)) and \
+                not self.outbox.has_asset("trackmaps/" + sname):
             try:
                 ac_root = self.cfg.get("ac_root") or trackmap.find_ac_root(APP_DIR)
                 sg = trackmap.grab_sections(ac_root, self.track,
-                                            self.track_config, self.cfg.data_dir)
+                                            self.track_config, self._stage_dir)
             except Exception:
                 log("sections grab failed:\n" + traceback.format_exc())
                 sg = None
             if sg is not None:
-                log("sections: published " + sg[0])
-                paths.append(sg[1])
-        if paths and self.cfg.get("auto_push"):
-            self.git.request_push(paths, "Track data " + self.track)
+                log("sections: queued " + sg[0])
+                self.outbox.add_asset(sg[0], sg[1])
+                queued = True
+        if queued:
+            self._sync()
 
     def _grab_setup(self, car, track):
         """The setup for the lap being stored.
@@ -610,47 +623,94 @@ class LeaderboardApp(object):
             return None
 
     def _grab_edges(self, track, cfg):
-        """Best-effort TRUE track boundary from the track's ai/fast_lane.ai."""
+        """Best-effort TRUE track boundary from the track's ai/fast_lane.ai.
+
+        Written to the local staging dir; the caller queues it as an outbox
+        asset (the sync worker owns all writes into docs/data).
+        """
         try:
             ac_root = self.cfg.get("ac_root") or trackmap.find_ac_root(APP_DIR)
-            return trackmap.grab_edges(ac_root, track, cfg, self.cfg.data_dir)
+            return trackmap.grab_edges(ac_root, track, cfg, self._stage_dir)
         except Exception:
             log("edges grab failed:\n" + traceback.format_exc())
             return None
 
     def _grab_trackmap(self, track, cfg):
-        """Best-effort copy of the AC track's map.png for the web viewer."""
+        """Best-effort copy of the AC track's map.png (to staging, as above)."""
         try:
             ac_root = self.cfg.get("ac_root") or trackmap.find_ac_root(APP_DIR)
-            return trackmap.grab(ac_root, track, cfg, self.cfg.data_dir)
+            return trackmap.grab(ac_root, track, cfg, self._stage_dir)
         except Exception:
             log("trackmap grab failed:\n" + traceback.format_exc())
             return None
 
-    def _publish(self, message, force=False, extra_paths=None):
-        if not self.cfg.repo_configured():
-            self._set_status("not a git clone -- cannot push", error=True)
+    def _sync(self):
+        """Kick the background sync (fetch + replay outbox + push)."""
+        if not (self.cfg.repo_configured() and self.cfg.get("auto_push")):
+            # No git (or pushing disabled): the outbox still lands in the
+            # local data files, like the old design -- just never pushed.
+            self.git.apply_outbox_locally()
             return
-        if not (self.cfg.get("auto_push") or force):
-            return
-        paths = self.store.data_paths()
-        if extra_paths:
-            paths = paths + list(extra_paths)
-        self.git.request_push(paths, message)
+        self.git.request_sync()
+
+    def _merged_store(self):
+        """Synced state + unsynced outbox laps.
+
+        Reads the worker's atomic view snapshot when one exists -- git
+        rewrites docs/data in place mid-cycle, so those files are only safe
+        for the WORKER to read. Falls back to docs/data before the first
+        sync ever completes.
+        """
+        src = self._view_dir if os.path.isfile(
+            os.path.join(self._view_dir, "records.json")) else self.cfg.data_dir
+        store = storage.Store(src).load()
+        for e in self.outbox.snapshot():
+            if e.get("type") == "user":
+                store.add_user(e.get("name"))
+            elif e.get("type") == "lap":
+                store.upsert_record(dict(e.get("record") or {}))
+        return store
+
+    def _reload_store(self):
+        """A sync changed the data files (the other rig pushed): reload and
+        refresh the UI so their laps appear in-game."""
+        self.store = self._merged_store()
+        self.users = self.store.all_users()
+        if self.selected is not None:
+            sel = storage.norm(self.selected)
+            if not any(storage.norm(u) == sel for u in self.users):
+                self.selected = None
+        self._render_driver_grid()
+        self._refresh_board()
 
     def _on_git_status(self, status):
-        # Called from the git worker thread; only touches simple values.
-        self.status_error = status.startswith("error")
-        self.status_text = "git: " + status
+        # Called from the git worker thread; only stores a plain string.
+        # The main thread decides what to display in _apply_status.
+        self._git_status = status
 
     # -- rendering --------------------------------------------------------
     def _set_status(self, text, error=False):
         self.status_text = text
         self.status_error = error
+        self._status_at = self._session_t
 
     def _apply_status(self):
-        self._set(self.l_status, self.status_text)
-        self._color(self.l_status, RED if self.status_error else MUTED)
+        # App statuses (PB, driver added, errors) hold the line for 10s so a
+        # periodic background sync can't stomp them; after that the git
+        # state shows. Offline with nothing queued is muted, not red.
+        git = self._git_status
+        recent = (self._session_t - self._status_at) < 10.0
+        if (self.status_text and recent) or not git:
+            text, err = self.status_text, self.status_error
+        else:
+            err = git.startswith("error")
+            if err and self.outbox.count() == 0 and (
+                    "offline" in git or "timed out" in git):
+                text, err = "git: offline -- will retry", False
+            else:
+                text = "git: " + git
+        self._set(self.l_status, text[:90])
+        self._color(self.l_status, RED if err else MUTED)
 
     def _refresh_board(self):
         if not self.row_pos:
@@ -751,10 +811,24 @@ class LeaderboardApp(object):
             self._sample_telemetry(dt)
 
         # Everything else (UI, lap poll) runs at a relaxed cadence.
+        self._session_t += dt
         self._accum += dt
         if self._accum < 0.5:
             return
+        elapsed = self._accum
         self._accum = 0.0
+
+        # The other rig may be pushing laps right now: sync periodically (a
+        # fetch no-ops when nothing changed) and reload the board when the
+        # worker reports new data. Also retries any queued laps after errors.
+        self._sync_timer += elapsed
+        if self._sync_timer >= self._sync_interval:
+            self._sync_timer = 0.0
+            self._sync()
+        if self.git.data_version != self._seen_data_version:
+            self._seen_data_version = self.git.data_version
+            log("sync: data changed, reloading board")
+            self._reload_store()
 
         track = ac_data.get_track()
         cfg = ac_data.get_track_config()
@@ -873,6 +947,9 @@ def acShutdown():
     if _app is None:
         return
     try:
-        _app.store.save()
+        # Data is durable in the outbox; last-chance sync is best-effort
+        # (the worker is a daemon thread -- a stranded commit self-heals
+        # via the salvage path next session).
+        _app._sync()
     except Exception:
         log("acShutdown error:\n" + traceback.format_exc())

@@ -13,6 +13,10 @@ _smoke_config.json
 _localdata/
 .DS_Store
 
+# Crash-proof app log -- written every session on every rig; the per-rig
+# debug_report_*.txt (from send_debug.bat) is the committable debug channel
+debug.log
+
 # Assetto Corsa crash reports (may contain a memory dump + your username)
 *.dmp
 *.report

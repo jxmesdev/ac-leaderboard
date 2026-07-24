@@ -1,45 +1,47 @@
-# AC Leaderboard
+# Bradford Leaderboard
 
 An in-game [Assetto Corsa](https://www.assettocorsa.net/) python app that records
-the **fastest valid lap per driver** for each **track + car** combination, stores
-them as JSON, and pushes them to this git repo so a **GitHub Pages** site can
-display them.
+each driver's **3 fastest valid laps** for every **track + car** combination, stores
+them as JSON with full lap telemetry, and syncs them through this git repo so a
+**GitHub Pages** site can display them. Multiple rigs can share one leaderboard —
+even racing at the same time.
 
 - **Repo:** https://github.com/jxmesdev/ac-leaderboard
 - **Live board:** https://jxmesdev.github.io/ac-leaderboard/
 
 Features:
 
-- **Auto-capture** — reads AC's best *valid* lap and saves a driver's personal best
-  automatically. Only the fastest lap per driver is kept; a quicker lap overwrites it.
-- **Clickable driver list** — every driver ever entered shows as a button; click to
-  pick who's at the wheel. The selected driver and the leader are highlighted.
-- **Driver = your AC name** — laps auto-attribute to your Assetto Corsa profile name
-  (set it in Content Manager); **+ Add me** adds/selects it, and you click a name in
-  the grid to switch. AC's in-game text field crashes the game, so there's no typing.
-  `docs/data/users.json` can also pre-seed the roster.
-- **Auto-publish** — every time a driver beats their best, it's committed and
-  `git push`ed on a background thread, so it never stutters the game.
-- **Lap telemetry** — the best lap's throttle / brake / speed / gear / steering and
-  track position are recorded (~30 Hz) and saved alongside the record. The Pages site
-  has a **MoTeC-style lap viewer** (track map + stacked traces) where you can **overlay
-  every other driver's lap** on the same track+car and compare with a synced cursor.
+- **Per-lap capture** — every completed clean lap is judged against the selected
+  driver's own record; their 3 fastest laps per combo are kept, with official AC
+  sector splits. Cut/invalid laps and laps with no driver selected are discarded.
+- **Clickable driver grid** — type a name + Enter (or the **Add** button) to add a
+  driver, click a name to switch. No auto-select, no auto-create.
+- **Multi-rig sync** — every lap queues in a local outbox and a background worker
+  replays it onto the remote's latest state (fetch → reset → replay → push). Two
+  rigs racing simultaneously never conflict; each rig pulls periodically so the
+  other rig's laps appear in-game within about a minute.
+- **Lap telemetry** — throttle / brake / speed / gear / steering / position at
+  ~30 Hz for every stored lap, plus the running car **setup** captured live via a
+  CSP Lua companion (auto-installed). The Pages site has a MoTeC-style viewer
+  (track map with true boundaries + corner names, stacked traces, sector focus,
+  setup comparison) that overlays any set of laps.
 
-## Install on the gaming PC (no files to move)
+## Install on a gaming PC (no files to move)
 
-The repo root **is** the AC app, so you clone it straight into AC's python-apps
-folder and it works. There is nothing to copy around, and updates are just `git pull`.
+The repo root **is** the AC app: clone it straight into AC's python-apps folder.
+Updates are just `git pull`.
 
 ### 1. Requirements
-- **[Git for Windows](https://git-scm.com/download/win)** installed and on `PATH`
-  (the app shells out to `git`). Make sure `git push` works **without prompting**
-  (sign in once via the Git Credential Manager, or use an SSH key / cached PAT).
-- **No Python packages** — the app uses only the standard library that ships inside
-  Assetto Corsa's embedded interpreter.
+- **[Git for Windows](https://git-scm.com/download/win)** installed and on `PATH`.
+- **A GitHub login with push access to this repo**, cached so pushes never prompt
+  (see step 3 — the app pushes headless mid-game and cannot answer a prompt).
+- **CSP (Custom Shaders Patch)** for live setup capture (optional — everything
+  else works without it; setups fall back to the most recently saved file).
+- **No Python packages** — only the standard library inside AC's interpreter.
 
 ### 2. Clone it *as the app folder*
-Clone into AC's python apps directory, naming the folder `ac_leaderboard`
-(underscore — AC uses the folder name as the module name, so no hyphen):
+The folder name **must** be `ac_leaderboard` (underscore!). A bare `git clone`
+defaults to `ac-leaderboard`, which AC silently refuses to load:
 
 ```powershell
 cd "C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\apps\python"
@@ -48,99 +50,108 @@ git clone https://github.com/jxmesdev/ac-leaderboard.git ac_leaderboard
 
 You should now have `…\apps\python\ac_leaderboard\ac_leaderboard.py`.
 
-### 3. Enable it in-game
-- **Content Manager / AC → Settings → Assetto Corsa → General → UI Modules**: tick
-  **AC Leaderboard**.
-- Join a session and open the app from the right-hand app bar.
+### 3. Cache credentials with one manual push
+From the cloned folder, prove a headless push works **before** starting AC:
 
-That's it. No config file is required — see below only if you want to tweak things.
+```powershell
+cd "…\apps\python\ac_leaderboard"
+git commit --allow-empty -m "credential test" ; git push ; git pull --rebase
+```
+
+Sign in when the Git Credential Manager pops up; after this the app can push
+silently. (If `git push` still prompts, the in-game sync will time out instead
+of hanging — fix the credentials and it retries by itself.)
+
+### 4. Enable it in-game
+- **Content Manager / AC → Settings → General → UI Modules**: tick
+  **Bradford Leaderboard**.
+- Join a session and open the app from the right-hand app bar.
+- If CSP is installed, also enable the auto-installed **BL Setup Capture** Lua
+  app once (it appears after the first session).
+
+### Adding a second rig
+Follow the same four steps on the other PC. Recommended: give each rig its own
+identity in `config.json` (copy `config.example.json`) so commits are tellable
+apart when debugging:
+
+```json
+{ "author_name": "Dads rig", "author_email": "dad@rig.local" }
+```
+
+Both rigs can record at once — laps merge by design (see *How syncing works*).
+Keep track/car **mods identical** on both PCs: combos are keyed by AC's folder
+names, so differing mod versions split the board (Kunos content always matches).
 
 ### Updating later
 ```powershell
 cd "…\apps\python\ac_leaderboard"
 git pull
 ```
-(Do this with AC closed.) Your recorded times live in the same repo and are pushed
-to GitHub, so nothing is lost.
+(Do this with AC closed. The app also fast-forwards itself to the remote during
+play; code changes take effect at the next AC restart.)
 
 ## Configuration (optional)
 
-`repo_path` **auto-detects** to the app folder itself (which is this clone), so you
-normally don't set anything. To change behaviour, copy `config.example.json` →
-`config.json` (it's git-ignored) and edit:
+Copy `config.example.json` → `config.json` (git-ignored) and edit:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `repo_path` | `""` → the app folder | Only set this if you keep the clone somewhere else. |
-| `data_subdir` | `docs/data` | Where `records.json` / `users.json` are written (must be under `docs/` for Pages). |
-| `auto_capture` | `true` | Save your best valid lap automatically. |
-| `auto_push` | `true` | Commit + push each saved time. |
-| `git_branch` | `main` | Branch to push. |
+| `repo_path` | `""` → the app folder | Only set if the clone lives elsewhere. |
+| `data_subdir` | `docs/data` | Where the JSON lives (must be under `docs/` for Pages). |
+| `auto_push` | `true` | Sync automatically (laps still queue locally if off). |
+| `sync_interval_s` | `60` | Seconds between background pulls (and push retries). |
+| `git_branch` | `main` | Branch to sync. |
+| `author_name` / `author_email` | `AC Leaderboard` | Per-rig commit identity. |
 | `leaderboard_rows` | `10` | Rows shown in-game. |
-| `record_telemetry` | `true` | Record best-lap telemetry for the lap viewer. |
+| `record_telemetry` | `true` | Record per-lap telemetry for the viewer. |
 | `telemetry_hz` | `30` | Telemetry sample rate. |
-| `ac_root` | `""` → auto | AC install path; used to copy the track's `map.png`. Auto-detected from the app folder. |
+| `ac_root` | `""` → auto | AC install path (track map/edges/sections grabs). |
+| `setups_dir` | `""` → Documents | Override if OneDrive redirects Documents. |
+| `web_url` | Pages URL | Opened by the in-game **Open web leaderboard** button. |
 
 ## Using it in-game
 
 | Action | How |
 |---|---|
-| Pick your driver | Click your name in the driver grid |
-| Add / select yourself | Click **+ Add me** (uses your AC profile name) |
-| Add friends | Each person sets their AC driver name in Content Manager, then drives (auto-added) or clicks **+ Add me** |
-| Pre-seed drivers (optional) | Edit `docs/data/users.json` — e.g. `["James","Alex"]` |
-| Save a PB | Just drive — a new clean best lap is saved and pushed for the selected driver |
-| Toggle auto-capture | **Auto-capture: ON/OFF** button |
+| Add a driver | Type the name, then **Enter** or the **Add** button |
+| Pick the driver at the wheel | Click their name in the grid |
+| Save a lap | Just drive — every clean lap beats-or-not their own top 3 |
+| See the other rig's laps | Automatic — the board refreshes after each background pull |
+| Open the website | **Open web leaderboard** button (bottom of the window) |
 
-The status line shows what happened (`PB for James: 1:21.200`, `git: synced`, …).
-Every time a driver beats their best on the current combo, the new time is committed
-and pushed to GitHub automatically (slower laps are ignored, so no push).
+The status line shows what happened (`PB for James: 1:21.200`, `top-3 lap for
+Dad: 1:22.010`, `git: synced`, `git: error: … 2 lap(s) queued, will retry`, …).
 
-> **Why there's no text field:** AC's in-game text-input widget crashes the game
-> natively on this CSP build — three crash dumps, all in the DirectInput/WndProc
-> keyboard path, even with a do-nothing validate callback. It's a CSP/AC-level bug,
-> not something the app can fix from Python (`ac.getText` crashes too). So driver
-> names come from your **AC profile** — a reliable *native* text field in Content
-> Manager / AC options — auto-attributed to your laps and addable with **+ Add me**.
-> For a fixed friend group, pre-seed `docs/data/users.json` and everyone just clicks
-> their name.
+## How syncing works (and why two rigs can't corrupt it)
+
+```
+lap finished ──► outbox (_localdata/, git-ignored, crash-safe)
+                    │
+        background worker, every lap + every sync_interval_s:
+                    │
+   fetch ► salvage stranded commits ► reset --hard to origin ► replay
+   outbox onto origin's files (dedupe + top-3 prune) ► commit ► push
+                    │                                    │ rejected? retry
+                    └── data changed? bump version ──► in-game board reloads
+```
+
+The main thread **never writes** `docs/data`; the worker rebuilds it from the
+remote's truth plus the outbox every cycle. So concurrent laps from two rigs
+merge instead of conflicting, a lost push race just replays, laps queue locally
+while offline, and a corrupt or diverged clone self-heals from origin. Pruning
+(top-3 per driver+combo) re-runs deterministically on the merged data, deleting
+dropped laps' telemetry with the same commit.
+
+`send_debug.bat` writes a per-PC `debug_report_<COMPUTERNAME>.txt`, so support
+snapshots from two rigs never collide either.
 
 ## Lap viewer (on the Pages site)
 
-On the leaderboard, any driver with recorded telemetry shows a 📈 next to their name.
-Click it to open the **lap viewer** (`lap.html`):
-
-- A **track map** with each racing line kept thin so you can see it against the track.
-  **Scroll to zoom, drag to pan, double-click to reset.** When a best lap is recorded
-  the app copies that track's **`map.png`** from AC and stores its `map.ini` transform
-  (`px = x*SCALE_FACTOR + X_OFFSET`), so the viewer draws the **real circuit outline
-  and width** with the lines laid on top — letting you judge whether a driver is using
-  all the track. (Falls back to a shaded `edges` ribbon, or lines only, if no map.)
-- Stacked **traces vs distance**: throttle, brake, speed, gear, steering.
-- A **Laps** panel listing every driver's lap for that same track + car — tick any of
-  them to **overlay** their lap on the map and all traces, each in its own colour.
-- Hover the traces or map for a **synced cursor**: a readout shows every lap's values
-  at that point, plus **Δ** (the time gained/lost versus the primary lap there).
-
-Telemetry is recorded for the **best** lap only and overwritten when it's beaten, so
-the map/traces always reflect each driver's fastest lap.
-
-## How it works
-
-```
-Assetto Corsa ──► ac_leaderboard.py ──► acl_core (storage / leaderboard / telemetry)
-   telemetry         (UI + glue)              │
-                                              ├─► docs/data/records.json + users.json
-                                              ├─► docs/data/telemetry/<combo>__<driver>.json
-                                              └─► git_sync ──► git commit + push (background)
-                                                                    │
-                                              GitHub ──► Pages (index.html + lap.html)
-```
-
-Auto-capture uses `ac.getCarState(0, acsys.CS.BestLap)`, which AC only sets for laps
-that were **not invalidated** (no cutting / off-tracks) — so the board stays clean.
-Only the single best time per `(track, config, car, driver)` is kept, so the JSON
-stays small and is exactly the leaderboard payload.
+Click any leaderboard row to open the **lap viewer** (`lap.html`): true-boundary
+track map with AC's own corner/straight names and sector lines, stacked traces
+(throttle/brake/speed/gear/steering + delta) with sector focus, per-lap colours,
+an At-cursor readout, sector table with gaps, and a setup comparison table with
+per-lap downloads. Laps are shareable via the `?show=` URL.
 
 ## Repository layout
 
@@ -148,61 +159,49 @@ stays small and is exactly the leaderboard payload.
 ac_leaderboard/                  ← repo root == the AC app (clone here)
 ├── ac_leaderboard.py            ← in-game entry point + UI (the "glue")
 ├── config.example.json          ← optional; copy to config.json to tweak
+├── send_debug.bat               ← one-click debug snapshot → GitHub
 ├── acl_core/                    ← pure-Python, unit-tested logic (no `ac` import)
-│   ├── config.py  storage.py  leaderboard.py
-│   ├── timefmt.py git_sync.py  ac_data.py  telemetry.py
+│   ├── config.py  storage.py  leaderboard.py  outbox.py  git_sync.py
+│   ├── timefmt.py ac_data.py  telemetry.py  trackmap.py  ailine.py
+│   ├── setups.py  luainstall.py
+├── lua/acl_setup/               ← CSP Lua companion (live setup capture)
 ├── docs/                        ← GitHub Pages site (Pages serves from /docs)
-│   ├── index.html               ← leaderboards (links to the lap viewer)
-│   ├── lap.html                 ← MoTeC-style lap viewer + overlay
-│   └── data/{records,users}.json, data/telemetry/*.json
-├── tests/{test_core,test_telemetry}.py   ← run on any machine (no AC needed)
-└── tools/                       ← mock `ac` + off-car smoke test
+│   ├── index.html               ← leaderboard
+│   ├── lap.html                 ← lap viewer + overlays
+│   └── data/…                   ← records/users JSON, telemetry, trackmaps
+├── tests/                       ← run on any machine (no AC needed)
+└── tools/                       ← mock `ac`, smoke test, two-rig sync test
 ```
 
 ## Develop / test on macOS (no Assetto Corsa needed)
 
-The `acl_core` package never imports `ac`/`acsys`, so it runs anywhere.
-
 ```bash
-python3 tests/test_core.py                       # leaderboard/storage unit tests
-python3 tests/test_telemetry.py                  # telemetry recorder unit tests
-python3 tools/smoke_ingame.py /path/to/a/clone   # full flow (incl. a driven lap) vs a fake `ac`
-cd docs && python3 -m http.server 8777           # preview the Pages site + lap viewer
+python3 -m unittest discover -s tests        # unit tests
+python3 tools/smoke_ingame.py /path/to/clone # full in-game flow vs a fake `ac`
+python3 tools/tworig_test.py /tmp/tworig     # two rigs sharing one remote
+cd docs && python3 -m http.server 8777       # preview the Pages site
 ```
 
 ## Data format
 
-`docs/data/records.json` — one entry per driver per combo (best kept):
+`docs/data/records.json` — up to 3 laps per driver per combo:
 ```json
 [
   { "track": "spa", "config": "", "car": "ferrari_488_gt3",
-    "user": "James", "time_ms": 81200,
+    "user": "James", "time_ms": 81200, "splits": [27000, 27100, 27100],
     "date": "2026-07-21T22:14:26Z", "source": "auto",
-    "telemetry": "telemetry/spa____ferrari_488_gt3__james.json" }
+    "telemetry": "telemetry/spa____ferrari_488_gt3__james__81200.json" }
 ]
 ```
-`docs/data/users.json` — every driver ever created:
-```json
-["James", "Alex"]
-```
-`docs/data/telemetry/<combo>__<driver>.json` — best-lap telemetry, columnar arrays
-(one value per ~1/30 s sample) so the viewer can index one cursor across all channels:
-```json
-{ "track":"spa","car":"ferrari_488_gt3","driver":"James","time_ms":81200,
-  "hz":30,"track_len_m":7004,"n":4100,
-  "nsp":[…], "t":[…], "thr":[…], "brk":[…], "spd":[…],
-  "gear":[…], "str":[…], "x":[…], "z":[…] }
-```
-`nsp` (0–1 lap fraction) is the alignment axis for overlays; `x`/`z` are world metres
-for the map; `str` is degrees. A ~90 s lap ≈ 80–120 KB (much less over the wire).
+`docs/data/users.json` — every driver ever created. Telemetry files are columnar
+arrays (`nsp` is the alignment axis; `t` cumulative ms; `x`/`z` world metres;
+`str` degrees; embedded `setup` ini) — immutable, since the filename carries the
+lap time.
 
 ## Notes & limitations
 
-- **Single PC.** One machine pushes to the repo; there's no merge handling. A rejected
-  `git push` (remote diverged) is reported, not auto-resolved.
-- **Track/car IDs** are AC's folder names (`spa`, `ferrari_488_gt3`); the Pages site
-  prettifies them.
-- **Embedded interpreter.** All in-game code targets AC's Python 3.3.5 — no f-strings,
-  `pathlib`, or modern typing.
-- **Driver limit** in the in-game grid is 10 (plenty for a friend group); more can be
-  added to `users.json` and still appear on the Pages board.
+- **Embedded interpreter.** All in-game code targets AC's Python 3.3.5 — no
+  f-strings, `pathlib`, or modern typing. Every `ac.*` listener callback must be
+  a plain module-level function, and nothing heavy may run inside one.
+- **Driver grid** shows the first 10 drivers.
+- **Track/car IDs** are AC's folder names; the site prettifies them.

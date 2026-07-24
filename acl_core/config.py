@@ -21,10 +21,13 @@ DEFAULTS = {
     "git_exe": "git",
     "author_name": "AC Leaderboard",
     "author_email": "ac-leaderboard@local",
-    # Push automatically whenever a record is saved.
+    # Push automatically whenever a record is saved. When false (or when the
+    # install is not a git clone) laps still land in the local data files.
     "auto_push": True,
-    # Automatically capture your best lap from AC's shared memory.
-    "auto_capture": True,
+    # Seconds between background pull/push cycles while in-session, so laps
+    # from the other rig appear in-game without waiting for your own lap.
+    # Also the retry cadence for queued laps after a failed push. Min 15.
+    "sync_interval_s": 60,
     # Number of leaderboard rows to render in-game.
     "leaderboard_rows": 10,
     # Record per-lap telemetry (throttle/brake/speed/gear/steer/position) for
@@ -35,6 +38,11 @@ DEFAULTS = {
     # AC install root (…/assettocorsa). Leave "" to auto-detect from the app
     # folder; used to copy the track's map.png for the lap viewer.
     "ac_root": "",
+    # Where AC saves car setups. Leave "" for Documents/Assetto Corsa/setups
+    # (set explicitly if OneDrive redirects your Documents folder).
+    "setups_dir": "",
+    # Opened by the in-game "Open web leaderboard" button.
+    "web_url": "https://jxmesdev.github.io/ac-leaderboard/",
 }
 
 
