@@ -103,7 +103,10 @@
   .multipop .row:hover { background: var(--panel2); }
   .multipop .row.sel { color: var(--accent); }
   .optlap { padding: 10px 18px; border-top: 1px solid var(--line);
-    color: var(--muted); font-size: 12px; }
+    color: var(--muted); font-size: 12px;
+    /* mixed fonts (mono time vs sans labels) sit on different baselines --
+       centre every piece on the same line instead */
+    display: flex; align-items: center; line-height: 1; }
   .optlap b { color: var(--accent); font-weight: 600; margin-left: 8px;
     font-family: ui-monospace, "SF Mono", Menlo, monospace; }
   .optlap .optsep { margin: 0 8px; }
