@@ -425,7 +425,7 @@
     // label + styled dropdown of every lap; changing it switches primary
     var sub = document.getElementById("subtitle");
     sub.innerHTML = "<b style='color:var(--text)'>Primary Lap:</b>";
-    sub.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap";
+    sub.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:30px";
     var sel = document.createElement("select"); sel.id = "primsel";
     laps.forEach(function(l, i){
       var o = document.createElement("option");
