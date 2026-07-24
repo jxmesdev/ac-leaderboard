@@ -144,6 +144,25 @@ def _consume_web_clicked():
     return v
 
 
+_add_clicked = False
+
+
+def _on_add_clicked(x, y):
+    # Stash ONLY -- the field is read by the update loop, never from here.
+    # (The original Add button called ac.getText inside this handler and
+    # crashed AC natively.)
+    global _add_clicked
+    _add_clicked = True
+    dbg("add button clicked")
+
+
+def _consume_add_clicked():
+    global _add_clicked
+    v = _add_clicked
+    _add_clicked = False
+    return v
+
+
 def _valid_splits(splits, lap_ms):
     """Sanity-check sector times against the lap: non-empty, all positive,
     and summing to (about) the lap time. Returns the list or None."""
@@ -219,9 +238,7 @@ class LeaderboardApp(object):
     # -- construction -----------------------------------------------------
     def build(self):
         driver_grid_rows = (MAX_DRIVERS + DRIVER_COLS - 1) // DRIVER_COLS
-        win_h = 150 + driver_grid_rows * 26 + 170 + self._rows * ROW_H
         self.window = ac.newApp(APP_NAME)
-        ac.setSize(self.window, WIN_W, win_h)
         try:
             ac.setTitle(self.window, APP_NAME)
             ac.setBackgroundOpacity(self.window, 0.85)
@@ -258,12 +275,17 @@ class LeaderboardApp(object):
             self.driver_btn_pos.append((bx, by))
         y = grid_y0 + driver_grid_rows * 26 + 6
 
-        # Add a driver: type a name + Enter. (No "+ Add me" button -- it triggered
-        # a native crash on this rig; typing is the single, reliable path.)
-        self._label("New driver (type + Enter):", MARGIN, y, 12)
+        # Add a driver: type a name, then Enter OR the Add button. The button
+        # only stashes a flag; the field is read with ac.getText from the
+        # update loop (the original Add button crashed because it called
+        # getText inside the click handler).
+        self._label("New driver (type, then Enter or Add):", MARGIN, y, 12)
         y += 16
-        self.in_newuser = self._text_input(MARGIN, y, WIN_W - 2 * MARGIN, 22,
-                                           _on_validate_typed)
+        add_w = 60
+        self.in_newuser = self._text_input(
+            MARGIN, y, WIN_W - 2 * MARGIN - add_w - 6, 22, _on_validate_typed)
+        self.btn_add = self._button("Add", WIN_W - MARGIN - add_w, y, add_w,
+                                    22, _on_add_clicked)
         y += 28
 
         # Status line (red when it's an error).
@@ -283,9 +305,14 @@ class LeaderboardApp(object):
             self.row_gap.append(self._label("", self.cx_gap, y, 13))
             y += ROW_H
 
+        # Always the LAST widget: pinned at the bottom, and the window height
+        # is derived from the final y so no dead space opens up below it when
+        # rows are added above.
+        y += 6
         self._button("Open web leaderboard", MARGIN, y, 170, 22,
                      _on_web_clicked)
-        y += 28
+        y += 22 + MARGIN
+        ac.setSize(self.window, WIN_W, y)
 
         if not self.cfg.repo_configured():
             self._set_status("not a git clone -- times save locally, no push")
@@ -670,6 +697,30 @@ class LeaderboardApp(object):
                 log("update: clearing input")
                 self._set(self.in_newuser, "")
             log("update: pending handled")
+
+        # Add button: read the field HERE, outside the click event handler.
+        # This is the app's one use of ac.getText -- deferred, because calling
+        # it inside the click callback is what crashed AC originally. If the
+        # game ever dies right after an Add click, debug.log ending at
+        # "add: reading field" convicts getText itself and we fall back to
+        # Enter-only.
+        if _consume_add_clicked() and self.in_newuser is not None:
+            dbg("add: reading field")
+            txt = None
+            try:
+                txt = ac.getText(self.in_newuser)
+            except Exception:
+                pass
+            dbg("add: field -> " + repr(txt))
+            name = txt.strip() if isinstance(txt, str) else ""
+            if name:
+                self._add_driver(name)
+                self._set(self.in_newuser, "")
+            elif txt is None:
+                self._set_status("couldn't read the field -- press Enter "
+                                 "instead", error=True)
+            else:
+                self._set_status("type a name first", error=True)
 
         # A clicked driver button stashes its slot index; apply it here,
         # outside the click event handler.

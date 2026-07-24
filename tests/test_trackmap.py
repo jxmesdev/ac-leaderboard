@@ -1,6 +1,7 @@
 """Unit tests for the track-map grabber (fake AC install, no AC needed)."""
 
 import io
+import json
 import os
 import shutil
 import sys

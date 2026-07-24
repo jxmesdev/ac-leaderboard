@@ -80,6 +80,30 @@ assert app._app.selected == "Alex", "duplicate typing must not switch"
 assert "already exists" in app._app.status_text, app._app.status_text
 print("duplicate entry ->", app._app.status_text)
 
+# The Add button: click stashes a flag; the NEXT acUpdate reads the field via
+# ac.getText (deferred -- calling it inside the click handler crashes AC).
+mock_ac.setText(app._app.in_newuser, "Dave")
+mock_ac.click(app._app.btn_add)
+app.acUpdate(1 / 60.0)
+assert "Dave" in app._app.users, app._app.users
+assert app._app.selected == "Dave", app._app.selected
+assert mock_ac.getText(app._app.in_newuser) == "", "field must clear on Add"
+print("Add button ->", driver_button_texts())
+
+# Add with an empty field is a friendly error, not a crash.
+mock_ac.click(app._app.btn_add)
+app.acUpdate(1 / 60.0)
+assert "type a name" in app._app.status_text, app._app.status_text
+
+# Add with a duplicate name errors and does not switch.
+mock_ac.setText(app._app.in_newuser, "ALEX")
+mock_ac.click(app._app.btn_add)
+app.acUpdate(1 / 60.0)
+assert "already exists" in app._app.status_text, app._app.status_text
+assert app._app.selected == "Dave", "duplicate Add must not switch"
+mock_ac.setText(app._app.in_newuser, "")
+print("Add-button edge cases OK")
+
 # Regression check: a newly-added driver's button must be ON-SCREEN, not parked
 # at (-500, -500). (Bug: slots hidden as empty were never restored on add.)
 for i, name in enumerate(app._app.users):
