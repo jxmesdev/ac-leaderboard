@@ -219,8 +219,16 @@ assert rec.get("splits") == [27000, 27100, 27100], rec.get("splits")
 assert rec.get("telemetry") == \
     "telemetry/spa____ferrari_488_gt3__james__81200.json", rec.get("telemetry")
 
+# No conditions on this box (shared memory is Windows/AC-only) -- the
+# payload must simply lack the key, never crash.
+assert "conditions" not in tel, "conditions should be absent off-rig"
+
 # A SECOND, slower lap for the same driver -> a second record (top3) with its
 # own telemetry file (up to each driver's 3 fastest laps are kept).
+# Fake the shared-memory read for THIS lap to prove the capture path.
+from acl_core import siminfo
+siminfo.read_conditions = lambda: {"air": 22.5, "road": 31.0, "grip": 0.982,
+                                   "wind_kmh": 12.0, "wind_deg": 210}
 drive_lap(5.0)
 mock_ac.STATE.nsp = 0.0
 app.acUpdate(1 / 60.0)
@@ -244,8 +252,12 @@ by_ms = dict((r["time_ms"], r) for r in james_recs)
 assert by_ms[82500].get("telemetry") == \
     "telemetry/spa____ferrari_488_gt3__james__82500.json"
 assert by_ms[82500].get("splits") == [27500, 27400, 27600]
-assert json.load(open(tel_path2)).get("splits") == [27500, 27400, 27600]
-print("second (top-3) lap stored with its own telemetry + splits")
+tel2 = json.load(open(tel_path2))
+assert tel2.get("splits") == [27500, 27400, 27600]
+assert tel2.get("conditions") == {"air": 22.5, "road": 31.0, "grip": 0.982,
+                                  "wind_kmh": 12.0, "wind_deg": 210}, \
+    tel2.get("conditions")
+print("second (top-3) lap stored with telemetry + splits + conditions")
 
 # Let the background git worker finish.
 wait_synced()

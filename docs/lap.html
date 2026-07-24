@@ -52,7 +52,7 @@
   .layout { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; margin-top:20px; }
   .layout .card { margin-top:0; min-width:0; }
   .colL, .colR, .pair { display:contents; }
-  #mapcard{order:1} #lapscard{order:2} #cursorcard{order:3}
+  #mapcard{order:1} #lapscard{order:2} #cursorcard{order:3} #conditions{order:3}
   #sectors{order:4} #traces{order:5} #setups{order:6}
   @media (min-width:1281px){
     .layout { grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start; }
@@ -231,6 +231,10 @@
         <div class="card" id="cursorcard">
           <h2>At cursor <span id="cursorpos" style="text-transform:none;letter-spacing:0;color:var(--muted)"></span></h2>
           <div class="readout"><table id="readout"></table></div>
+        </div>
+        <div class="card" id="conditions" style="display:none">
+          <h2>Conditions</h2>
+          <div class="readout"><table id="condtable"></table></div>
         </div>
       </div>
       <div class="colR">
@@ -419,6 +423,8 @@
   function setLapColor(l, c){
     l.color=c;
     try { localStorage.setItem("aclc2:"+l.rec.telemetry, c); } catch(err) {}
+    // swatches live in cached tables too -- force them to rebuild
+    secSig=""; setupSig="";
     renderLapList(); scheduleRender();
   }
 
@@ -607,7 +613,7 @@
     attachHover();
     attachMapInteraction();
     window.addEventListener("resize", scheduleRender);
-    ["cursorcard", "traces", "setups"].forEach(function(id){
+    ["cursorcard", "conditions", "traces", "setups"].forEach(function(id){
       makeCollapsible(document.getElementById(id));
     });
   }
@@ -675,6 +681,45 @@
     drawReadout(sl);
     renderSectors(sl);
     renderSetups(sl);
+    renderConditions(sl);
+  }
+
+  // ---- conditions (air/road temp, grip, wind from AC shared memory) ---
+  var condSig="";
+  function renderConditions(sl){
+    var card=document.getElementById("conditions");
+    var tbl=document.getElementById("condtable");
+    var withC=sl.filter(function(l){ return l.data && l.data.conditions; });
+    var sig=sl.map(function(l){
+      return l.rec.telemetry+"|"+l.color+(l.data&&l.data.conditions?"+c":"");
+    }).join(";");
+    if(sig===condSig) return;
+    condSig=sig;
+    // older laps predate conditions capture: hide the card entirely when
+    // NO shown lap has data; dashes fill mixed rows below
+    if(!withC.length){ card.style.display="none"; tbl.innerHTML=""; return; }
+    card.style.display="";
+    function f1(v, suffix){
+      return v==null ? "—" : Number(v).toFixed(1)+suffix;
+    }
+    var html="<thead><tr><th>Lap</th><th>Air</th><th>Road</th>"+
+      "<th>Grip</th><th>Wind</th></tr></thead><tbody>";
+    sl.forEach(function(l){
+      var c=l.data ? l.data.conditions : null;
+      html+="<tr><td><span class='swatch' style='display:inline-block;background:"+l.color+
+        "'></span> "+(l.trophy? l.trophy+" ":"")+esc(l.rec.user)+"</td>";
+      if(c){
+        html+="<td>"+f1(c.air, "°C")+"</td>"+
+          "<td>"+f1(c.road, "°C")+"</td>"+
+          "<td>"+(c.grip!=null ? (c.grip*100).toFixed(1)+"%" : "—")+"</td>"+
+          "<td>"+f1(c.wind_kmh, " km/h")+
+          (c.wind_deg!=null ? " @ "+c.wind_deg+"°" : "")+"</td>";
+      } else {
+        html+="<td>—</td><td>—</td><td>—</td><td>—</td>";
+      }
+      html+="</tr>";
+    });
+    tbl.innerHTML=html+"</tbody>";
   }
 
   function setupCanvas(cv, cssH){

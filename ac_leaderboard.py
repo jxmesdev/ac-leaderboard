@@ -20,7 +20,7 @@ if APP_DIR not in sys.path:
 
 import ac  # provided by Assetto Corsa
 
-from acl_core import ac_data, ailine, config, luainstall, setups, storage, telemetry, trackmap
+from acl_core import ac_data, ailine, config, luainstall, setups, siminfo, storage, telemetry, trackmap
 from acl_core.git_sync import GitSync
 from acl_core.outbox import Outbox
 from acl_core.leaderboard import leaderboard_for
@@ -538,6 +538,15 @@ class LeaderboardApp(object):
                     self.outbox.add_asset(eg[0], eg[1])
         except Exception:
             log("edges attach failed:\n" + traceback.format_exc())
+        try:
+            # session conditions from AC's shared memory (no python API)
+            cond = siminfo.read_conditions()
+            if cond is not None:
+                payload["conditions"] = cond
+            else:
+                log("conditions: shared memory unavailable")
+        except Exception:
+            log("conditions read failed:\n" + traceback.format_exc())
         try:
             su = self._grab_setup(car, track)
             if su is not None:
