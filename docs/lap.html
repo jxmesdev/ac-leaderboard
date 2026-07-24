@@ -254,7 +254,8 @@
   var cursor = null;    // nsp 0..1 or null
   var raf = 0;
   var cam = {scale:1, x:0, y:0};   // map zoom/pan on top of the fit-to-view
-  var focus = null;     // {i, d0, d1} sector focus (nsp domain), null = whole lap
+  var mapFocus = null;   // {i, d0, d1} sector focus of the MAP camera
+  var traceFocus = null; // {i, d0, d1} sector focus of the TRACES x-domain
   var mapFitPending = false;   // drawMap should recompute cam for the focus
   var camAnim = null;          // {from, to, t0} camera fly-to animation
   var camCustom = false;       // user panned/zoomed away: no sector chip active
@@ -452,15 +453,19 @@
     secSig = "";
     applyTitles();
     if(!l.shown){ toggleLap(l, true); }
-    // sector focus derives from the PRIMARY lap's splits: re-derive or reset
-    if(focus){
-      var b = sectorBounds();
-      if(b && b[focus.i]){
-        focus = {i:focus.i, d0:b[focus.i][0], d1:b[focus.i][1]};
-        startDomAnim(); mapFitPending = true;
-      } else {
-        focusAll();
-      }
+    // sector focuses derive from the PRIMARY lap's splits: re-derive or reset
+    var nb = sectorBounds();
+    if(mapFocus){
+      if(nb && nb[mapFocus.i]){
+        mapFocus = {i:mapFocus.i, d0:nb[mapFocus.i][0], d1:nb[mapFocus.i][1]};
+        mapFitPending = true;
+      } else { focusMapAll(); }
+    }
+    if(traceFocus){
+      if(nb && nb[traceFocus.i]){
+        traceFocus = {i:traceFocus.i, d0:nb[traceFocus.i][0], d1:nb[traceFocus.i][1]};
+        startDomAnim();
+      } else { focusTraceAll(); }
     }
     renderLapList();
     try {
@@ -577,7 +582,7 @@
       if(dk>=1){ domShown=domAnim.to.slice(); domAnim=null; }
       else scheduleRender();
     } else {
-      domShown = focus? [focus.d0, focus.d1] : [0,1];
+      domShown = traceFocus? [traceFocus.d0, traceFocus.d1] : [0,1];
     }
     laps.forEach(function(l){
       if(l._sw && l._sw.value!==l.color) l._sw.value=l.color;
@@ -840,10 +845,10 @@
     if(mapFitPending){
       mapFitPending=false;
       var target=null;
-      if(focus && primary && primary.data){
+      if(mapFocus && primary && primary.data){
         var fd=primary.data, b0x=Infinity,b1x=-Infinity,b0y=Infinity,b1y=-Infinity;
         for(var fi=0; fi<fd.nsp.length; fi++){
-          if(fd.nsp[fi]<focus.d0 || fd.nsp[fi]>focus.d1) continue;
+          if(fd.nsp[fi]<mapFocus.d0 || fd.nsp[fi]>mapFocus.d1) continue;
           var fm=toMap(fd.x[fi],fd.z[fi]), fb=sBase(fm[0],fm[1]);
           if(fb[0]<b0x)b0x=fb[0]; if(fb[0]>b1x)b1x=fb[0];
           if(fb[1]<b0y)b0y=fb[1]; if(fb[1]>b1y)b1y=fb[1];
@@ -1005,7 +1010,7 @@
     var cv=document.getElementById("map"), dragging=false, lx=0, ly=0;
     cv.addEventListener("wheel", function(e){
       e.preventDefault(); camAnim=null;
-      if(focus){ focus=null; startDomAnim(); }
+      if(mapFocus){ mapFocus=null; }
       if(!camCustom || secSig){ camCustom=true; secSig=""; scheduleRender(); }
       var r=cv.getBoundingClientRect(), mxp=e.clientX-r.left, myp=e.clientY-r.top;
       var ns=Math.max(1, Math.min(14, cam.scale*Math.exp(-e.deltaY*0.0015)));
@@ -1016,11 +1021,11 @@
     cv.addEventListener("mousedown", function(e){ camAnim=null; dragging=true; lx=e.clientX; ly=e.clientY; cv.style.cursor="grabbing"; });
     window.addEventListener("mouseup", function(){ dragging=false; cv.style.cursor="grab"; });
     window.addEventListener("mousemove", function(e){ if(!dragging) return;
-      if(focus){ focus=null; startDomAnim(); }
+      if(mapFocus){ mapFocus=null; }
       if(!camCustom){ camCustom=true; secSig=""; }
       cam.x+=(e.clientX-lx); cam.y+=(e.clientY-ly); lx=e.clientX; ly=e.clientY; scheduleRender(); });
     cv.addEventListener("dblclick", function(){
-      focusAll();   // resets cam (animated) AND reselects "All" on both bars
+      focusMapAll();   // resets the camera + map bar; traces keep their focus
     });
     cv.style.cursor="grab";
     // hover -> cursor: nearest PRIMARY-lap sample in screen space (<=25 px),
@@ -1103,33 +1108,44 @@
   }
   function startDomAnim(){
     domAnim={from:[domShown[0], domShown[1]],
-             to: focus? [focus.d0, focus.d1] : [0,1],
+             to: traceFocus? [traceFocus.d0, traceFocus.d1] : [0,1],
              t0: performance.now()};
   }
-  function focusSector(i){
+  function focusMapSector(i){
     var b=sectorBounds(); if(!b || !b[i]) return;
-    focus={i:i, d0:b[i][0], d1:b[i][1]}; camCustom=false;
-    startDomAnim(); mapFitPending=true; secSig=""; scheduleRender();
+    mapFocus={i:i, d0:b[i][0], d1:b[i][1]}; camCustom=false;
+    mapFitPending=true; secSig=""; scheduleRender();
   }
-  function focusAll(){
-    focus=null; camCustom=false;
-    startDomAnim(); mapFitPending=true; secSig=""; scheduleRender();
+  function focusMapAll(){
+    mapFocus=null; camCustom=false;
+    mapFitPending=true; secSig=""; scheduleRender();
+  }
+  function focusTraceSector(i){
+    var b=sectorBounds(); if(!b || !b[i]) return;
+    traceFocus={i:i, d0:b[i][0], d1:b[i][1]};
+    startDomAnim(); secSig=""; scheduleRender();
+  }
+  function focusTraceAll(){
+    traceFocus=null;
+    startDomAnim(); secSig=""; scheduleRender();
   }
   var secSig="";
-  // fill a container with [S1]..[Sn][All] focus buttons reflecting `focus`;
-  // used by BOTH the Sectors card and the overlay on the track map, so the
-  // two bars can never drift apart (both are rebuilt from the same state).
-  function fillSecBar(el, ps){
+  // fill a container with [S1]..[Sn][All] buttons driving EITHER the map
+  // camera ("map") or the traces' x-domain ("trace") -- independent states.
+  function fillSecBar(el, ps, which){
     el.innerHTML="";
+    var st = which==="map" ? mapFocus : traceFocus;
     ps.forEach(function(_, i){
       var b=document.createElement("button"); b.textContent="S"+(i+1);
-      if(focus && focus.i===i) b.className="on";
-      b.addEventListener("click", function(){ focusSector(i); });
+      if(st && st.i===i) b.className="on";
+      b.addEventListener("click", function(){
+        if(which==="map") focusMapSector(i); else focusTraceSector(i);
+      });
       el.appendChild(b);
     });
     var all=document.createElement("button"); all.textContent="All";
-    if(!focus && !camCustom) all.className="on";
-    all.addEventListener("click", focusAll);
+    if(!st && (which!=="map" || !camCustom)) all.className="on";
+    all.addEventListener("click", which==="map" ? focusMapAll : focusTraceAll);
     el.appendChild(all);
   }
 
@@ -1212,7 +1228,7 @@
     if(!(primary && primary.data)){ card.style.display="none"; mapbar.innerHTML="";
       if(tracebar) tracebar.innerHTML=""; secSig=""; return; }
     var ps=splitsOf(primary);
-    var sig=(ps?ps.join(","):"none")+"|"+(focus?focus.i:-1)+"|"+(camCustom?"c":"")+"|"+
+    var sig=(ps?ps.join(","):"none")+"|"+(mapFocus?mapFocus.i:-1)+"|"+(traceFocus?traceFocus.i:-1)+"|"+(camCustom?"c":"")+"|"+
       sl.map(function(l){ return l.rec.telemetry; }).join(";");
     if(sig===secSig) return;
     secSig=sig;
@@ -1226,8 +1242,8 @@
       body.appendChild(mu);
       return;
     }
-    fillSecBar(mapbar, ps);
-    if(tracebar) fillSecBar(tracebar, ps);
+    fillSecBar(mapbar, ps, "map");
+    if(tracebar) fillSecBar(tracebar, ps, "trace");
     // sector times stay white; the gap vs the primary sits to the LEFT of
     // each time, small and red/green. Total lap time closes the row.
     var html="<thead><tr><th>Lap</th>";
