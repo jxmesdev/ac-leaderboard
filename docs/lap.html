@@ -127,6 +127,13 @@
     .readout .hfull { display:none; }
     .readout .habbr { display:inline; }
   }
+  /* Conditions: 9 columns need breathing room -- natural widths, wider
+     gaps, no wrapping; the .readout wrapper scrolls horizontally when
+     the table outgrows the card */
+  #condtable { table-layout:auto; width:auto; min-width:100%; }
+  #condtable th, #condtable td { padding:4px 16px; white-space:nowrap; }
+  #condtable th:first-child, #condtable td:first-child { width:auto; padding-left:8px; }
+  #condtable th:last-child, #condtable td:last-child { padding-right:8px; }
   .hint { color:var(--muted); font-size:12px; padding:0 14px 12px; }
   canvas.trace { width:100%; display:block; touch-action:pan-y; cursor:crosshair; }
   .tracetitle { font:600 11px "Chakra Petch",sans-serif; text-transform:uppercase;
