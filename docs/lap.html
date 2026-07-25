@@ -52,8 +52,12 @@
   .layout { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; margin-top:20px; }
   .layout .card { margin-top:0; min-width:0; }
   .colL, .colR, .pair { display:contents; }
-  #mapcard{order:1} #lapscard{order:2} #cursorcard{order:3} #conditions{order:3}
-  #sectors{order:4} #traces{order:5} #setups{order:6}
+  /* single-column (mobile) order: Laps, map, At cursor, Sectors, Traces,
+     Conditions, Stats, Setups. Desktop columns re-group these with
+     display:flex containers, ordering within each column. */
+  #lapscard{order:1} #mapcard{order:2} #cursorcard{order:3}
+  #sectors{order:4} #traces{order:5} #conditions{order:6}
+  #stats{order:7} #setups{order:8}
   @media (min-width:1281px){
     .layout { grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start; }
     .colL, .colR { display:flex; flex-direction:column; gap:16px; min-width:0; }
@@ -150,6 +154,9 @@
     flex-wrap:wrap; row-gap:6px; }
   .opthow { margin-left:auto; padding-left:16px; font-size:10px;
     color:var(--muted); opacity:.75; }
+  @media (max-width:760px){
+    .opthow { margin-left:0; padding-left:0; width:100%; text-align:left; }
+  }
   .optlap b { color:var(--accent); font-weight:600; margin-left:8px;
     font-family:ui-monospace,"SF Mono",Menlo,monospace;
     position:relative; top:1px; }
@@ -243,6 +250,10 @@
         <div class="card" id="conditions" style="display:none">
           <h2>Conditions</h2>
           <div class="readout"><table id="condtable"></table></div>
+        </div>
+        <div class="card" id="stats" style="display:none">
+          <h2>Stats</h2>
+          <div class="readout"><table id="statstable"></table></div>
         </div>
       </div>
       <div class="colR">
@@ -621,7 +632,7 @@
     attachHover();
     attachMapInteraction();
     window.addEventListener("resize", scheduleRender);
-    ["cursorcard", "conditions", "traces", "setups"].forEach(function(id){
+    ["cursorcard", "conditions", "stats", "traces", "setups"].forEach(function(id){
       makeCollapsible(document.getElementById(id));
     });
     // on phones EVERY card collapses; on desktop these three stay fixed
@@ -714,42 +725,96 @@
     renderSectors(sl);
     renderSetups(sl);
     renderConditions(sl);
+    renderStats(sl);
   }
 
-  // ---- conditions (air/road temp, grip, wind from AC shared memory) ---
+  // ---- conditions (lap date + weather/tyres/fuel from shared memory) --
+  function fmtDate(iso){
+    if(!iso) return "—";
+    var d=new Date(iso);
+    if(isNaN(d.getTime())) return "—";
+    var M=["Jan","Feb","Mar","Apr","May","Jun",
+           "Jul","Aug","Sep","Oct","Nov","Dec"];
+    return d.getDate()+" "+M[d.getMonth()]+" "+
+      ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
+  }
+  function _lapCell(l){
+    return "<td><span class='swatch' style='display:inline-block;background:"+
+      l.color+"'></span> "+(l.trophy? l.trophy+" ":"")+esc(l.rec.user)+"</td>";
+  }
   var condSig="";
   function renderConditions(sl){
     var card=document.getElementById("conditions");
     var tbl=document.getElementById("condtable");
-    var withC=sl.filter(function(l){ return l.data && l.data.conditions; });
     var sig=sl.map(function(l){
       return l.rec.telemetry+"|"+l.color+(l.data&&l.data.conditions?"+c":"");
     }).join(";");
     if(sig===condSig) return;
     condSig=sig;
-    // older laps predate conditions capture: hide the card entirely when
-    // NO shown lap has data; dashes fill mixed rows below
-    if(!withC.length){ card.style.display="none"; tbl.innerHTML=""; return; }
+    // the date column comes from the record, so the card shows whenever
+    // laps are shown; capture-time fields dash out on older laps
+    if(!sl.length){ card.style.display="none"; tbl.innerHTML=""; return; }
     card.style.display="";
     function f1(v, suffix){
       return v==null ? "—" : Number(v).toFixed(1)+suffix;
     }
-    var html="<thead><tr><th>Lap</th><th>Air</th><th>Road</th>"+
-      "<th>Grip</th><th>Wind</th></tr></thead><tbody>";
+    var html="<thead><tr><th>Lap</th><th>Date</th><th>Air</th><th>Road</th>"+
+      "<th>Grip</th><th>Wind</th><th>Tyres</th><th>Fuel</th>"+
+      "<th>Session</th></tr></thead><tbody>";
     sl.forEach(function(l){
-      var c=l.data ? l.data.conditions : null;
-      html+="<tr><td><span class='swatch' style='display:inline-block;background:"+l.color+
-        "'></span> "+(l.trophy? l.trophy+" ":"")+esc(l.rec.user)+"</td>";
-      if(c){
-        html+="<td>"+f1(c.air, "°C")+"</td>"+
-          "<td>"+f1(c.road, "°C")+"</td>"+
-          "<td>"+(c.grip!=null ? (c.grip*100).toFixed(1)+"%" : "—")+"</td>"+
-          "<td>"+f1(c.wind_kmh, " km/h")+
-          (c.wind_deg!=null ? " @ "+c.wind_deg+"°" : "")+"</td>";
-      } else {
-        html+="<td>—</td><td>—</td><td>—</td><td>—</td>";
-      }
-      html+="</tr>";
+      var c=(l.data ? l.data.conditions : null) || {};
+      html+="<tr>"+_lapCell(l)+
+        "<td>"+fmtDate(l.rec.date)+"</td>"+
+        "<td>"+f1(c.air, "°C")+"</td>"+
+        "<td>"+f1(c.road, "°C")+"</td>"+
+        "<td>"+(c.grip!=null ? (c.grip*100).toFixed(1)+"%" : "—")+"</td>"+
+        "<td>"+(c.wind_kmh!=null ? f1(c.wind_kmh, " km/h")+
+          (c.wind_deg!=null ? " @ "+c.wind_deg+"°" : "") : "—")+"</td>"+
+        "<td>"+(c.tyres ? esc(c.tyres) : "—")+"</td>"+
+        "<td>"+f1(c.fuel, " L")+"</td>"+
+        "<td>"+(c.session ? esc(c.session) : "—")+"</td>"+
+        "</tr>";
+    });
+    tbl.innerHTML=html+"</tbody>";
+  }
+
+  // ---- stats (computed from the stored traces -- works for EVERY lap) -
+  function lapStats(l){
+    if(l._stats) return l._stats;
+    var d=l.data;
+    if(!d || !d.spd || !d.spd.length) return null;
+    var n=d.spd.length, top=0, ft=0, br=0, shifts=0;
+    for(var i=0;i<n;i++){
+      if(d.spd[i]>top) top=d.spd[i];
+      if(d.thr && d.thr[i]>=95) ft++;
+      if(d.brk && d.brk[i]>=5) br++;
+      if(d.gear && i>0 && d.gear[i]!==d.gear[i-1]) shifts++;
+    }
+    l._stats={top:top, ft:Math.round(ft/n*100),
+              br:Math.round(br/n*100), shifts:shifts};
+    return l._stats;
+  }
+  var statsSig="";
+  function renderStats(sl){
+    var card=document.getElementById("stats");
+    var tbl=document.getElementById("statstable");
+    var sig=sl.map(function(l){ return l.rec.telemetry+"|"+l.color; }).join(";");
+    if(sig===statsSig) return;
+    statsSig=sig;
+    var rows=sl.filter(function(l){ return lapStats(l); });
+    if(!rows.length){ card.style.display="none"; tbl.innerHTML=""; return; }
+    card.style.display="";
+    var html="<thead><tr><th>Lap</th><th>Top speed</th>"+
+      "<th>Full throttle</th><th>Braking</th><th>Gear changes</th>"+
+      "</tr></thead><tbody>";
+    rows.forEach(function(l){
+      var s=lapStats(l);
+      html+="<tr>"+_lapCell(l)+
+        "<td>"+s.top.toFixed(1)+" km/h</td>"+
+        "<td>"+s.ft+"%</td>"+
+        "<td>"+s.br+"%</td>"+
+        "<td>"+s.shifts+"</td>"+
+        "</tr>";
     });
     tbl.innerHTML=html+"</tbody>";
   }
@@ -1520,7 +1585,7 @@
       bests.forEach(function(v, oi){
         oh+="<span class='optsep'>·</span>S"+(oi+1)+": "+fmtSec(v);
       });
-      oh+="<span class='opthow'>fastest sectors of the selected laps, combined</span>";
+      oh+="<span class='opthow'>Fastest sectors of the selected laps, combined</span>";
       opt.innerHTML=oh;
       body.appendChild(opt);
     }

@@ -120,9 +120,14 @@ def _read_page(tag, struct_cls):
         return None
 
 
-def read_conditions():
-    """Snapshot {"air","road","grip","wind_kmh","wind_deg"} or None.
+_SESSIONS = {0: "practice", 1: "qualify", 2: "race", 3: "hotlap",
+             4: "time attack", 5: "drift", 6: "drag"}
 
+
+def read_conditions():
+    """Snapshot of session conditions at lap time, or None.
+
+    {"air","road","grip","wind_kmh","wind_deg","tyres","fuel","session"}.
     None when ctypes/mmap are unavailable (stripped interpreter), AC's
     pages aren't mapped (not Windows, sim not running), or the values
     look like a dead page. Never raises.
@@ -140,6 +145,9 @@ def read_conditions():
             "grip": round(float(gr.surfaceGrip), 4),
             "wind_kmh": round(float(gr.windSpeed), 1),
             "wind_deg": int(round(float(gr.windDirection))) % 360,
+            "tyres": str(gr.tyreCompound).strip(),
+            "fuel": round(float(ph.fuel), 1),
+            "session": _SESSIONS.get(int(gr.session), "unknown"),
         }
     except Exception:
         return None

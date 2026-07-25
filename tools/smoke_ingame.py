@@ -228,7 +228,9 @@ assert "conditions" not in tel, "conditions should be absent off-rig"
 # Fake the shared-memory read for THIS lap to prove the capture path.
 from acl_core import siminfo
 siminfo.read_conditions = lambda: {"air": 22.5, "road": 31.0, "grip": 0.982,
-                                   "wind_kmh": 12.0, "wind_deg": 210}
+                                   "wind_kmh": 12.0, "wind_deg": 210,
+                                   "tyres": "Street (SM)", "fuel": 24.5,
+                                   "session": "practice"}
 drive_lap(5.0)
 mock_ac.STATE.nsp = 0.0
 app.acUpdate(1 / 60.0)
@@ -255,7 +257,9 @@ assert by_ms[82500].get("splits") == [27500, 27400, 27600]
 tel2 = json.load(open(tel_path2))
 assert tel2.get("splits") == [27500, 27400, 27600]
 assert tel2.get("conditions") == {"air": 22.5, "road": 31.0, "grip": 0.982,
-                                  "wind_kmh": 12.0, "wind_deg": 210}, \
+                                  "wind_kmh": 12.0, "wind_deg": 210,
+                                  "tyres": "Street (SM)", "fuel": 24.5,
+                                  "session": "practice"}, \
     tel2.get("conditions")
 print("second (top-3) lap stored with telemetry + splits + conditions")
 

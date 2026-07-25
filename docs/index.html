@@ -110,6 +110,9 @@
     flex-wrap: wrap; row-gap: 6px; }
   .opthow { margin-left: auto; padding-left: 16px; font-size: 10px;
     color: var(--muted); opacity: .75; }
+  @media (max-width: 760px) {
+    .opthow { margin-left: 0; padding-left: 0; width: 100%; text-align: left; }
+  }
   .optlap b { color: var(--accent); font-weight: 600; margin-left: 8px;
     font-family: ui-monospace, "SF Mono", Menlo, monospace; }
   .optlap .optsep { margin: 0 8px; }
@@ -315,7 +318,7 @@
       var sep = '<span class="optsep">·</span>';
       html += '<div class="optlap">Optimal Lap:<b>' + fmtTime(tot) + '</b>' +
         sep + parts.join(sep) +
-        '<span class="opthow">fastest sectors of the filtered laps, combined</span>' +
+        '<span class="opthow">Fastest sectors of the filtered laps, combined</span>' +
         '</div>';
     }
     board.innerHTML = html;

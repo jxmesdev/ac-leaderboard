@@ -44,12 +44,17 @@ class TestSimInfo(unittest.TestCase):
             self.assertIsNone(siminfo.read_conditions())
             ph.airTemp = 22.5
             ph.roadTemp = 31.25
+            ph.fuel = 24.53
             gr.surfaceGrip = 0.98
             gr.windSpeed = 11.96
             gr.windDirection = 210.4
+            gr.tyreCompound = "Street (SM)"
+            gr.session = 0
             out = siminfo.read_conditions()
             self.assertEqual(out, {"air": 22.5, "road": 31.2, "grip": 0.98,
-                                   "wind_kmh": 12.0, "wind_deg": 210})
+                                   "wind_kmh": 12.0, "wind_deg": 210,
+                                   "tyres": "Street (SM)", "fuel": 24.5,
+                                   "session": "practice"})
         finally:
             siminfo._read_page = orig
 
