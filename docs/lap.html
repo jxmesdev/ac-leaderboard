@@ -641,7 +641,9 @@
     });
     var th=document.createElement("div");
     th.className="hint"; th.id="tracehint";
-    th.style.padding="6px 8px 0 46px";
+    // left edge matches the sector bar (and so the y-axis labels), not the
+    // plot area
+    th.style.padding="6px 14px 0";
     th.textContent="drag = zoom to selection · All = reset";
     host.appendChild(th);
     attachHover();
