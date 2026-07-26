@@ -295,15 +295,16 @@
       html += '</tr>';
     });
     html += '</tbody></table>';
-    // Optimal lap: best of each sector across the FILTERED laps (pool, both
-    // view modes), summed. Hidden when any sector has no data at all.
+    // Optimal lap: best of each sector across the VISIBLE rows, so it
+    // tracks both the driver filter and the Best/All toggle. Hidden when
+    // any sector has no data at all.
     var bests = [], nOpt = 0;
-    pool.forEach(function (r) {
+    rows.forEach(function (r) {
       if (r.splits && r.splits.length > nOpt) nOpt = Math.min(r.splits.length, 4);
     });
     for (var bi = 0; bi < nOpt; bi++) {
       var b = null;
-      pool.forEach(function (r) {
+      rows.forEach(function (r) {
         var v = r.splits ? r.splits[bi] : null;
         if (v != null && (b == null || v < b)) b = v;
       });
@@ -318,7 +319,7 @@
       var sep = '<span class="optsep">·</span>';
       html += '<div class="optlap">Optimal Lap:<b>' + fmtTime(tot) + '</b>' +
         sep + parts.join(sep) +
-        '<span class="opthow">Fastest sectors of the filtered laps, combined</span>' +
+        '<span class="opthow">Fastest sectors of the laps shown, combined</span>' +
         '</div>';
     }
     board.innerHTML = html;

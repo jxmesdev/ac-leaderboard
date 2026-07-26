@@ -122,6 +122,9 @@
   .readout th:first-child, .readout td:first-child { text-align:left; }
   .readout thead th { color:var(--muted); font-weight:600; font-family:"Chakra Petch",sans-serif;
     text-transform:uppercase; letter-spacing:.8px; font-size:10px; }
+  /* headings sit on the same baseline row even when one wraps to two
+     lines (narrow screens) */
+  .readout thead th, .sectable thead th, .setuptable thead th { vertical-align:bottom; }
   .readout .habbr { display:none; }
   @media (max-width:760px){
     .readout .hfull { display:none; }
@@ -636,6 +639,11 @@
       wrap.appendChild(tt); wrap.appendChild(cv); host.appendChild(wrap);
       traceCanvases.push({ch:ch, cv:cv});
     });
+    var th=document.createElement("div");
+    th.className="hint"; th.id="tracehint";
+    th.style.padding="6px 8px 0 46px";
+    th.textContent="drag = zoom to selection · All = reset";
+    host.appendChild(th);
     attachHover();
     attachMapInteraction();
     window.addEventListener("resize", scheduleRender);
@@ -658,10 +666,13 @@
     }
     if(mobileMq.addEventListener) mobileMq.addEventListener("change", unstrand);
     else if(mobileMq.addListener) mobileMq.addListener(unstrand);
-    // touch devices: the map is two-finger driven so the page still scrolls
+    // touch devices: both canvases are two-finger driven so one finger is
+    // left to the browser and the page still scrolls
     if(window.matchMedia("(pointer: coarse)").matches){
       var mh = document.getElementById("maphint");
       if(mh) mh.textContent = "two fingers = pan & zoom · double-tap = reset";
+      var th2 = document.getElementById("tracehint");
+      if(th2) th2.textContent = "drag = move cursor · pinch = zoom · double-tap = reset";
     }
   }
 
@@ -1432,7 +1443,11 @@
       var b=document.createElement("button"); b.textContent="S"+(i+1);
       if(st && st.i===i) b.className="on";
       b.addEventListener("click", function(){
-        if(which==="map") focusMapSector(i); else focusTraceSector(i);
+        // clicking the ACTIVE sector toggles back to the whole lap
+        var cur = which==="map" ? mapFocus : traceFocus;
+        var on = cur && cur.i === i;
+        if(which==="map") (on ? focusMapAll : focusMapSector)(i);
+        else (on ? focusTraceAll : focusTraceSector)(i);
       });
       el.appendChild(b);
     });
@@ -1650,15 +1665,24 @@
     if(ch.key==="str") return v.toFixed(0)+"°";
     return Math.round(v)+"%";   // thr / brk
   }
+  var MIN_TRACE_SPAN=0.002;   // ~0.2% of a lap: deep enough, never degenerate
   function attachHover(){
+    // fraction 0..1 across the PLOT area (excludes the axis padding)
+    function fracAt(cv, clientX){
+      var rect=cv.getBoundingClientRect();
+      var plotW=cv.clientWidth-PADL-PADR;
+      return Math.max(0,Math.min(1,(clientX-rect.left-PADL)/plotW));
+    }
     // map a clientX into the (possibly focused) trace domain
     function domAt(cv, clientX){
-      var rect=cv.getBoundingClientRect();
-      var cx=clientX-rect.left;
-      var plotW=cv.clientWidth-PADL-PADR;
       var dom=traceDomain();
-      var f=Math.max(0,Math.min(1,(cx-PADL)/plotW));
-      return dom[0]+f*(dom[1]-dom[0]);
+      return dom[0]+fracAt(cv, clientX)*(dom[1]-dom[0]);
+    }
+    function tDist(e){
+      return Math.abs(e.touches[0].clientX-e.touches[1].clientX);
+    }
+    function tMidX(e){
+      return (e.touches[0].clientX+e.touches[1].clientX)/2;
     }
     function handle(e, cv, ch){
       cursor=domAt(cv, e.touches?e.touches[0].clientX:e.clientX);
@@ -1670,15 +1694,38 @@
     var drag=null;    // {cv, x0} while the button is down
     traceCanvases.forEach(function(t){
       t.cv.addEventListener("mousemove",function(e){ handle(e,t.cv,t.ch); });
-      // touch: decide the gesture's direction once -- horizontal scrubs the
-      // cursor, vertical is handed to the browser so the PAGE scrolls
-      var tmode=null, tx0=0, ty0=0;
+      // touch: ONE finger decides direction once -- horizontal scrubs the
+      // cursor, vertical is handed to the browser so the PAGE scrolls.
+      // TWO fingers pinch-zoom the x-domain; double-tap resets.
+      var tmode=null, tx0=0, ty0=0, pDist=0, pAnchor=0, lastTap=0;
       t.cv.addEventListener("touchstart", function(e){
-        if(e.touches.length===1){
+        if(e.touches.length===2){
+          e.preventDefault(); domAnim=null;
+          pDist=tDist(e); pAnchor=domAt(t.cv, tMidX(e));
+        } else if(e.touches.length===1){
           tmode=null; tx0=e.touches[0].clientX; ty0=e.touches[0].clientY;
+          var now=Date.now();
+          if(now-lastTap<300){ e.preventDefault(); focusTraceAll(); }
+          lastTap=now;
         }
-      });
+      }, {passive:false});
       t.cv.addEventListener("touchmove",function(e){
+        if(e.touches.length===2){
+          // pinch: keep the domain point under the fingers pinned there,
+          // scaling the span by how far the fingers moved apart
+          e.preventDefault();
+          var d=tDist(e);
+          if(pDist>4 && d>4){
+            var dom=traceDomain(), span=dom[1]-dom[0];
+            var ns=Math.max(MIN_TRACE_SPAN, Math.min(1, span*(pDist/d)));
+            var f=fracAt(t.cv, tMidX(e));
+            var d0=Math.max(0, Math.min(1-ns, pAnchor-f*ns));
+            traceFocus={i:-2, d0:d0, d1:d0+ns};
+            domAnim=null; secSig=""; scheduleRender();
+            pDist=d;
+          }
+          return;
+        }
         if(e.touches.length!==1) return;
         if(tmode===null){
           var dx=Math.abs(e.touches[0].clientX-tx0);
