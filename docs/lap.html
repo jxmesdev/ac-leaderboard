@@ -644,7 +644,7 @@
     // left edge matches the sector bar (and so the y-axis labels), not the
     // plot area
     th.style.padding="6px 14px 0";
-    th.textContent="drag = zoom to selection · All = reset";
+    th.textContent="drag = zoom to selection · double-click = reset";
     host.appendChild(th);
     attachHover();
     attachMapInteraction();
@@ -1737,6 +1737,7 @@
         }
         if(tmode==="h"){ handle(e,t.cv,t.ch); e.preventDefault(); }
       }, {passive:false});
+      t.cv.addEventListener("dblclick", function(){ focusTraceAll(); });
       t.cv.addEventListener("mousedown", function(e){
         if(e.button!==0) return;
         var d=domAt(t.cv, e.clientX);
