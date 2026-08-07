@@ -170,20 +170,6 @@
   {
     "car": "ks_nissan_370z", 
     "config": "club_circuit", 
-    "date": "2026-08-07T07:47:20Z", 
-    "source": "auto", 
-    "splits": [
-      44870, 
-      37044
-    ], 
-    "telemetry": "telemetry/ks_vallelunga__club_circuit__ks_nissan_370z__daren__81914.json", 
-    "time_ms": 81914, 
-    "track": "ks_vallelunga", 
-    "user": "Daren"
-  }, 
-  {
-    "car": "ks_nissan_370z", 
-    "config": "club_circuit", 
     "date": "2026-08-07T07:48:23Z", 
     "source": "auto", 
     "splits": [
@@ -206,6 +192,20 @@
     ], 
     "telemetry": "telemetry/ks_vallelunga__club_circuit__ks_nissan_370z__daren__68291.json", 
     "time_ms": 68291, 
+    "track": "ks_vallelunga", 
+    "user": "Daren"
+  }, 
+  {
+    "car": "ks_nissan_370z", 
+    "config": "club_circuit", 
+    "date": "2026-08-07T07:50:34Z", 
+    "source": "auto", 
+    "splits": [
+      26355, 
+      35945
+    ], 
+    "telemetry": "telemetry/ks_vallelunga__club_circuit__ks_nissan_370z__daren__62300.json", 
+    "time_ms": 62300, 
     "track": "ks_vallelunga", 
     "user": "Daren"
   }
