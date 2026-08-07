@@ -194,5 +194,19 @@
     "time_ms": 62634, 
     "track": "ks_vallelunga", 
     "user": "Daren"
+  }, 
+  {
+    "car": "ks_nissan_370z", 
+    "config": "club_circuit", 
+    "date": "2026-08-07T07:49:31Z", 
+    "source": "auto", 
+    "splits": [
+      27881, 
+      40410
+    ], 
+    "telemetry": "telemetry/ks_vallelunga__club_circuit__ks_nissan_370z__daren__68291.json", 
+    "time_ms": 68291, 
+    "track": "ks_vallelunga", 
+    "user": "Daren"
   }
 ]
