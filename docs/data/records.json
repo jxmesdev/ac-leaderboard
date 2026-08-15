@@ -238,5 +238,20 @@
     "time_ms": 114475, 
     "track": "ks_laguna_seca", 
     "user": "Daren"
+  }, 
+  {
+    "car": "ks_mazda_mx5_cup", 
+    "config": "", 
+    "date": "2026-08-15T13:13:01Z", 
+    "source": "auto", 
+    "splits": [
+      41280, 
+      48240, 
+      31639
+    ], 
+    "telemetry": "telemetry/ks_laguna_seca____ks_mazda_mx5_cup__daren__121159.json", 
+    "time_ms": 121159, 
+    "track": "ks_laguna_seca", 
+    "user": "Daren"
   }
 ]
