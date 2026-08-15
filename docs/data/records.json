@@ -208,5 +208,20 @@
     "time_ms": 61290, 
     "track": "ks_vallelunga", 
     "user": "Daren"
+  }, 
+  {
+    "car": "ks_mazda_mx5_cup", 
+    "config": "", 
+    "date": "2026-08-15T13:09:05Z", 
+    "source": "auto", 
+    "splits": [
+      41774, 
+      40550, 
+      32792
+    ], 
+    "telemetry": "telemetry/ks_laguna_seca____ks_mazda_mx5_cup__daren__115116.json", 
+    "time_ms": 115116, 
+    "track": "ks_laguna_seca", 
+    "user": "Daren"
   }
 ]
