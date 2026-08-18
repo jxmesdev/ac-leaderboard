@@ -579,7 +579,13 @@ class LeaderboardApp(object):
 
     def _edges_state(self, track, cfg):
         """(rel_url, abs_path, stored_ver) for this track's edges file.
-        stored_ver is 0 when the file is missing or unreadable."""
+        stored_ver is 0 when the file is missing or unreadable.
+
+        A file whose "src" is not "ai" always reports as up to date: it is
+        measured geometry deployed by hand (e.g. Laguna Seca's src "surface"
+        boundary, built from driven surface data), which the fast_lane.ai
+        builder cannot reproduce. Regenerating it would silently replace
+        better geometry with worse, so the ver gate must never fire on it."""
         name = telemetry.slug(track) + "__" + telemetry.slug(cfg) + \
             "__edges.json"
         path = os.path.join(self.cfg.data_dir, "trackmaps", name)
@@ -587,7 +593,10 @@ class LeaderboardApp(object):
         if os.path.isfile(path):
             try:
                 with open(path) as f:
-                    ver = int(json.load(f).get("ver") or 0)
+                    stored = json.load(f)
+                ver = int(stored.get("ver") or 0)
+                if (stored.get("src") or "ai") != "ai":
+                    ver = max(ver, ailine.EDGES_VER)
             except Exception:
                 ver = 0
         return "trackmaps/" + name, path, ver
