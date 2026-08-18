@@ -212,21 +212,6 @@
   {
     "car": "ks_mazda_mx5_cup", 
     "config": "", 
-    "date": "2026-08-15T18:53:57Z", 
-    "source": "auto", 
-    "splits": [
-      39740, 
-      37053, 
-      30047
-    ], 
-    "telemetry": "telemetry/ks_laguna_seca____ks_mazda_mx5_cup__daren__106840.json", 
-    "time_ms": 106840, 
-    "track": "ks_laguna_seca", 
-    "user": "Daren"
-  }, 
-  {
-    "car": "ks_mazda_mx5_cup", 
-    "config": "", 
     "date": "2026-08-15T19:02:14Z", 
     "source": "auto", 
     "splits": [
@@ -338,6 +323,21 @@
     ], 
     "telemetry": "telemetry/ks_laguna_seca____ks_mazda_mx5_cup__daren__104767.json", 
     "time_ms": 104767, 
+    "track": "ks_laguna_seca", 
+    "user": "Daren"
+  }, 
+  {
+    "car": "ks_mazda_mx5_cup", 
+    "config": "", 
+    "date": "2026-08-18T18:55:09Z", 
+    "source": "auto", 
+    "splits": [
+      40015, 
+      34632, 
+      30033
+    ], 
+    "telemetry": "telemetry/ks_laguna_seca____ks_mazda_mx5_cup__daren__104680.json", 
+    "time_ms": 104680, 
     "track": "ks_laguna_seca", 
     "user": "Daren"
   }
