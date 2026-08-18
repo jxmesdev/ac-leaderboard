@@ -295,5 +295,20 @@
     "time_ms": 67191, 
     "track": "ks_brands_hatch", 
     "user": "dominika"
+  }, 
+  {
+    "car": "ks_mazda_mx5_cup", 
+    "config": "", 
+    "date": "2026-08-18T18:41:59Z", 
+    "source": "auto", 
+    "splits": [
+      178084, 
+      34106, 
+      29781
+    ], 
+    "telemetry": "telemetry/ks_laguna_seca____ks_mazda_mx5_cup__james__241971.json", 
+    "time_ms": 241971, 
+    "track": "ks_laguna_seca", 
+    "user": "James"
   }
 ]
