@@ -329,15 +329,15 @@
   {
     "car": "ks_mazda_mx5_cup", 
     "config": "", 
-    "date": "2026-08-19T18:43:26Z", 
+    "date": "2026-08-19T18:45:05Z", 
     "source": "auto", 
     "splits": [
-      38586, 
-      32530, 
-      28489
+      38280, 
+      32143, 
+      28301
     ], 
-    "telemetry": "telemetry/ks_laguna_seca____ks_mazda_mx5_cup__james__99605.json", 
-    "time_ms": 99605, 
+    "telemetry": "telemetry/ks_laguna_seca____ks_mazda_mx5_cup__james__98724.json", 
+    "time_ms": 98724, 
     "track": "ks_laguna_seca", 
     "user": "James"
   }
